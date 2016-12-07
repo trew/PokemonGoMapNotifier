@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import configargparse
-import httplib2
+import requests
 import urllib
 import os
 import simplejson as json
@@ -50,10 +50,13 @@ class NotifierServer:
         Processes an encountered pokemon and determines whether to send a notification or not
         """
 
+        # check for perfect IV
+        ivs = [extras[0], extras[1], extras[2]] if extras else None
         threshold = self.thresholds[pokemon_id]
         if distance and 0 < threshold < distance:
             # pokemon is out of range
-            return
+            if not ivs or sum(ivs) < 45: # return unless perfect
+                return
 
         self.cache[encounter] = 1  # cache it
 
@@ -62,7 +65,6 @@ class NotifierServer:
                                                                                       self.longitude,
                                                                                       latitude,
                                                                                       longitude)
-        ivs = [extras[0], extras[1], extras[2]] if extras else None
         moves = [pogoidmapper.get_move_name(extras[3]), pogoidmapper.get_move_name(extras[4])] if extras else None
 
         pokemon_name = pogoidmapper.get_pokemon_name(pokemon_id)
@@ -173,28 +175,21 @@ def notify_pushbullet(pokemon_name, distance, ivs, moves, gamepress, maps, navig
     url = 'https://api.pushbullet.com/v2/pushes'
     headers = {'Content-type': 'application/x-www-form-urlencoded'}
     API_KEY = extras['PUSHBULLET_API_KEY']
-
-    http = httplib2.Http()
-    http.add_credentials(API_KEY, '')
+    session = requests.Session()
+    session.auth = (API_KEY, '')
+    session.headers.update(headers)
     body = {
         'type': 'note',
         'title': title,
         'body': body,
     }
     try:
-        resp, cont = http.request(url, 'POST', headers=headers,
-        body=urllib.urlencode(body))
+        response = session.post(url, data=urllib.urlencode(body))
     except Exception as e:
         print "Exception {}".format(e)
     else:
-        if int(resp['status']) != 200:
-            try:
-                error_json = json.loads(cont)
-            except json.JSONDecodeError:
-                print "Couldn't decode json."
-            else:
-                desc = error_json['error']['message']
-                print "Error: {} {}".format(resp['status'], desc)
+        if response.status_code != 200:
+            print "Error: {} {}".format(response.status_code, response.reason)
         else:
             print 'Pushbullet message sent: ' + title
             pass
