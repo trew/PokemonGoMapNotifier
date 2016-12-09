@@ -148,7 +148,7 @@ def send(session, url, body):
         print "Exception {}".format(e)
         return False
     else:
-        if response.status_code != 200:
+        if response.status_code != 200 or response.status_code != 204:
             print "Error: {} {}".format(response.status_code, response.reason)
             return False
         else:
@@ -308,10 +308,5 @@ def main():
 
 
 if __name__ == '__main__':
-    if 'DISCORD_CHANNEL_ID' in os.environ and 'DISCORD_TOKEN' in os.environ:
-        DISCORD_CHANNEL_ID = os.environ['DISCORD_CHANNEL_ID']
-        DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
-
-    notify_discord(1, "name", 10, None, None, "GP", "MP", "NAV", {'DISCORD_CHANNEL_ID': DISCORD_CHANNEL_ID, 'DISCORD_TOKEN': DISCORD_TOKEN})
-    #main()
+    main()
 
