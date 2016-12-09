@@ -160,15 +160,16 @@ def notify_simple(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, map
 
 
 def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
-    if pokemon_id not in whitelists['pushbullet']:
-        return
+    perfect_ivs = sum(ivs) == 45 if ivs else False
 
-    threshold = thresholds['pushbullet'][pokemon_id]
+    if not perfect_ivs:
+        if pokemon_id not in whitelists['pushbullet']:
+            return
 
-    if distance and 0 < threshold < distance:
-        # pokemon is out of range
-        # check for perfect IV
-        if not ivs or sum(ivs) < 45: # return unless perfect
+        threshold = thresholds['pushbullet'][pokemon_id]
+
+        if distance and 0 < threshold < distance:
+            # pokemon is out of range
             return
 
     title, body = get_simple_formatting(pokemon_name, distance, ivs, moves, gamepress, maps, navigation)
@@ -191,12 +192,15 @@ def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress,
 
 
 def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
-    if pokemon_id not in whitelists['discord']:
-        return
+    perfect_ivs = sum(ivs) == 45 if ivs else False
 
-    threshold = thresholds['discord'][pokemon_id]
-    if 0 < threshold < 1000:
-        return
+    if not perfect_ivs:
+        if pokemon_id not in whitelists['discord']:
+            return
+
+        threshold = thresholds['discord'][pokemon_id]
+        if 0 < threshold < 1000:
+            return
 
     body = "{0} found! {1}".format(pokemon_name, maps)
     if ivs and moves:
