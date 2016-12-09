@@ -148,7 +148,7 @@ def send(session, url, body):
         print "Exception {}".format(e)
         return False
     else:
-        if response.status_code != 200 or response.status_code != 204:
+        if response.status_code != 200 and response.status_code != 204:
             print "Error: {} {}".format(response.status_code, response.reason)
             return False
         else:
