@@ -143,7 +143,7 @@ def get_simple_formatting(pokemon_name, distance, ivs, moves, gamepress, maps, n
 
 def send(session, url, body):
     try:
-        response = session.post(url, data=urllib.urlencode(body))
+        response = session.post(url, data=body)
     except Exception as e:
         print "Exception {}".format(e)
         return False
@@ -183,6 +183,7 @@ def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress,
         'body': body,
     }
 
+    body = urllib.urlencode(body)
     if send(session, url, body):
         print 'Pushbullet message sent: ' + title
 
@@ -200,6 +201,8 @@ def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, ma
     body = {
         'content': body
     }
+
+    body = json.dumps(body)
     if send(session, url, body):
         print 'Discord notified: ' + title
 
@@ -299,5 +302,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if 'DISCORD_CHANNEL_ID' in os.environ and 'DISCORD_TOKEN' in os.environ:
+        DISCORD_CHANNEL_ID = os.environ['DISCORD_CHANNEL_ID']
+        DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
+
+    notify_discord(1, "name", 10, None, None, "GP", "MP", "NAV", {'DISCORD_CHANNEL_ID': DISCORD_CHANNEL_ID, 'DISCORD_TOKEN': DISCORD_TOKEN})
+    #main()
 
