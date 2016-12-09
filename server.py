@@ -40,7 +40,7 @@ class NotifierServer:
 
         pokemon_name = pogoidmapper.get_pokemon_name(pokemon_id)
         gamepress = "https://pokemongo.gamepress.gg/pokemon/{0}".format(pokemon_id)
-        self.notifier_queue.put((pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation))
+        self.notifier_queue.put((str(pokemon_id), pokemon_name, distance, ivs, moves, gamepress, maps, navigation))
 
     def run(self):
         handler = ServerHandler
@@ -85,25 +85,24 @@ class ServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 # have this exact encounter been processed recently?
                 if encounter not in self.server.notifier_server.cache.keys():
 
-                    if pokemon_id in self.server.notifier_server.whitelist:
-                        if move_1:
-                            move_2 = message['move_2']
-                            iv_att = message['individual_attack']
-                            iv_def = message['individual_defense']
-                            iv_sta = message['individual_stamina']
-                            extras = (iv_att, iv_def, iv_sta, move_1, move_2)
+                    if move_1:
+                        move_2 = message['move_2']
+                        iv_att = message['individual_attack']
+                        iv_def = message['individual_defense']
+                        iv_sta = message['individual_stamina']
+                        extras = (iv_att, iv_def, iv_sta, move_1, move_2)
 
-                        latitude = message['latitude']
-                        longitude = message['longitude']
+                    latitude = message['latitude']
+                    longitude = message['longitude']
 
-                        has_distance = self.server.notifier_server.latitude and self.server.notifier_server.longitude
-                        distance = get_distance(float(self.server.notifier_server.latitude),
-                                                float(self.server.notifier_server.longitude),
-                                                float(latitude),
-                                                float(longitude)) if has_distance else None
+                    has_distance = self.server.notifier_server.latitude and self.server.notifier_server.longitude
+                    distance = get_distance(float(self.server.notifier_server.latitude),
+                                            float(self.server.notifier_server.longitude),
+                                            float(latitude),
+                                            float(longitude)) if has_distance else None
 
-                        self.server.notifier_server.process(pokemon_id, distance, latitude, longitude, extras,
-                                                            encounter)
+                    self.server.notifier_server.process(pokemon_id, distance, latitude, longitude, extras,
+                                                        encounter)
 
         self.send_response(200)
         self.end_headers()
@@ -128,7 +127,7 @@ def get_simple_formatting(pokemon_name, distance, ivs, moves, gamepress, maps, n
     distance_str = "Distance is {0}m.".format(distance) if distance else ""
 
     maps = "Google Maps: {0}".format(maps) if maps else ""
-    navigation = "Navigation: {1}".format(navigation) if navigation else ""
+    navigation = "Navigation: {0}".format(navigation) if navigation else ""
 
     title = "{0} found!".format(pokemon_name)
     body = ""
@@ -161,7 +160,10 @@ def notify_simple(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, map
 
 
 def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
-    threshold = thresholds[pokemon_id]
+    if pokemon_id not in whitelists['pushbullet']:
+        return
+
+    threshold = thresholds['pushbullet'][pokemon_id]
 
     if distance and 0 < threshold < distance:
         # pokemon is out of range
@@ -189,8 +191,11 @@ def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress,
 
 
 def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
-    threshold = thresholds[pokemon_id]
-    if threshold < 1000:
+    if pokemon_id not in whitelists['discord']:
+        return
+
+    threshold = thresholds['discord'][pokemon_id]
+    if 0 < threshold < 1000:
         return
 
     title, body = get_simple_formatting(pokemon_name, None, ivs, moves, gamepress, maps, None)
@@ -220,7 +225,7 @@ def notifier(methods_and_extras, q):
                     try:
                         method = method_and_extra[0]
                         extras = method_and_extra[1]
-                        method(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras)
+                        method(int(pokemon_id), pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras)
                     except Exception as e1:
                         print "Exception in notifier(%s): %s", method.__name__, e1
                 q.task_done()
@@ -247,20 +252,22 @@ def get_thresholds_and_whitelist(filename):
                 name = line.strip()
                 if name:
                     pokemon_id = pogoidmapper.get_pokemon_id(line.strip())
-                    id_to_threshold[pokemon_id] = threshold
-                    whitelist.append(pokemon_id)
+                    if pokemon_id not in id_to_threshold:
+                        id_to_threshold[pokemon_id] = threshold
+                        whitelist.append(pokemon_id)
 
     return id_to_threshold, whitelist
 
 
 thresholds = {}
-
+whitelists = {}
 
 def main():
     parser = configargparse.ArgParser()
     parser.add_argument('--host', help='Host', default='localhost')
     parser.add_argument('-p', '--port', help='Port', type=int, default=8000)
-    parser.add_argument('-w', '--whitelist', help='Whitelist file', default='whitelist.txt')
+    parser.add_argument('-pbwl', '--pushbullet-whitelist', help='Whitelist file', default='whitelist.txt')
+    parser.add_argument('-dcwl', '--discord-whitelist', help='Whitelist file', default='whitelist.txt')
     parser.add_argument('-lat', '--latitude', help='Latitude which will be used to determine distance to pokemons', type=float)
     parser.add_argument('-lon', '--longitude', help='Longitude which will be used to determine distance to pokemons', type=float)
     parser.add_argument('-loc', '--location', help='Location. Latitude,Longitude format')
@@ -269,7 +276,7 @@ def main():
     args = parser.parse_args()
 
     if args.location:
-        split = args.location.split(',')[0]
+        split = args.location.split(',')
         args.latitude = split[0]
         args.longitude = split[1]
 
@@ -303,11 +310,20 @@ def main():
     t.start()
 
     global thresholds
+    global whitelists
 
-    if args.whitelist:
-        thresholds, whitelist = get_thresholds_and_whitelist(args.whitelist)
+    if args.pushbullet_whitelist:
+        ths, wl = get_thresholds_and_whitelist(args.pushbullet_whitelist)
+        whitelists['pushbullet'] = wl
+        thresholds['pushbullet'] = ths
+
+    if args.discord_whitelist:
+        ths, wl = get_thresholds_and_whitelist(args.discord_whitelist)
+        whitelists['discord'] = wl
+        thresholds['discord'] = ths
+
     # Start the server
-    server = NotifierServer(args.host, args.port, args.latitude, args.longitude, whitelist, notifier_queue)
+    server = NotifierServer(args.host, args.port, args.latitude, args.longitude, whitelists, notifier_queue)
     server.run()
 
 
