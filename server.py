@@ -259,9 +259,15 @@ def main():
     parser.add_argument('-w', '--whitelist', help='Whitelist file', default='whitelist.txt')
     parser.add_argument('-lat', '--latitude', help='Latitude which will be used to determine distance to pokemons', type=float)
     parser.add_argument('-lon', '--longitude', help='Longitude which will be used to determine distance to pokemons', type=float)
+    parser.add_argument('-loc', '--location', help='Location. Latitude,Longitude format')
     parser.add_argument('-pb', '--pushbullet', help='Set if pushbullet should be notified')
     parser.add_argument('-dc', '--discord', help='Set if discord should be notified')
     args = parser.parse_args()
+
+    if args.location:
+        split = args.location.split(',')[0]
+        args.latitude = split[0]
+        args.longitude = split[1]
 
     if 'PUSHBULLET_API_KEY' in os.environ:
         PUSHBULLET_API_KEY = os.environ['PUSHBULLET_API_KEY']
