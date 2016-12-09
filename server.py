@@ -189,6 +189,10 @@ def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress,
 
 
 def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
+    threshold = thresholds[pokemon_id]
+    if threshold < 1000:
+        return
+
     title, body = get_simple_formatting(pokemon_name, None, ivs, moves, gamepress, maps, None)
 
     channel = extras['DISCORD_CHANNEL_ID']
@@ -199,7 +203,7 @@ def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, ma
     session = requests.Session()
     session.headers.update(headers)
     body = {
-        'content': body
+        'content': '{0}\n{1}'.format(title, body)
     }
 
     body = json.dumps(body)
