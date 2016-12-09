@@ -198,7 +198,17 @@ def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, ma
     if 0 < threshold < 1000:
         return
 
-    title, body = get_simple_formatting(pokemon_name, None, ivs, moves, gamepress, maps, None)
+    body = "{0} found! {1}".format(pokemon_name, maps)
+    if ivs and moves:
+        iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
+        extra_str = "IV: {0}/{1}/{2} {3}% Moves: {4} - {5}. {6}".format(ivs[0],
+                                                                        ivs[1],
+                                                                        ivs[2],
+                                                                        iv_percent,
+                                                                        moves[0],
+                                                                        moves[1],
+                                                                        gamepress)
+    body += "\n{0}".format(extra_str) if extra_str else ""
 
     channel = extras['DISCORD_CHANNEL_ID']
     token = extras['DISCORD_TOKEN']
@@ -208,12 +218,13 @@ def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, ma
     session = requests.Session()
     session.headers.update(headers)
     body = {
-        'content': '{0}\n{1}'.format(title, body)
+        'content': body
     }
 
     body = json.dumps(body)
     if send(session, url, body):
-        print 'Discord notified: ' + title
+        body = body[13:body.find("found!")]
+        print 'Discord notified: ' + body
 
 
 def notifier(methods_and_extras, q):
