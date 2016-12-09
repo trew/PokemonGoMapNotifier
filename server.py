@@ -15,51 +15,22 @@ import pogoidmapper
 
 
 class NotifierServer:
-    def __init__(self, host, port, latitude, longitude, whitelist_file, notifier_queue):
+    def __init__(self, host, port, latitude, longitude, whitelist, notifier_queue):
         self.host = host
         self.port = port
         self.latitude = latitude
         self.longitude = longitude
-        self.thresholds, self.whitelist = self.get_thresholds_and_whitelist(whitelist_file)
+        self.whitelist = whitelist
         self.notifier_queue = notifier_queue
         self.cache = LRUCache(maxsize=20)
-
-    @staticmethod
-    def get_thresholds_and_whitelist(filename):
-        id_to_threshold = {}
-        whitelist = []
-        threshold = -1
-
-        with open(filename, 'r') as f:
-            for line in f:
-                if line.startswith("#"):
-                    continue
-                if line.startswith("Threshold:"):
-                    threshold = int(line.split(":")[1].strip())
-                else:
-                    name = line.strip()
-                    if name:
-                        pokemon_id = pogoidmapper.get_pokemon_id(line.strip())
-                        id_to_threshold[pokemon_id] = threshold
-                        whitelist.append(pokemon_id)
-
-        return id_to_threshold, whitelist
 
     def process(self, pokemon_id, distance, latitude, longitude, extras, encounter):
         """
         Processes an encountered pokemon and determines whether to send a notification or not
         """
-
-        # check for perfect IV
-        ivs = [extras[0], extras[1], extras[2]] if extras else None
-        threshold = self.thresholds[pokemon_id]
-        if distance and 0 < threshold < distance:
-            # pokemon is out of range
-            if not ivs or sum(ivs) < 45: # return unless perfect
-                return
-
         self.cache[encounter] = 1  # cache it
 
+        ivs = [extras[0], extras[1], extras[2]] if extras else None
         maps = "http://www.google.com/maps/place/{0},{1}".format(latitude, longitude)
         navigation = "http://maps.google.com/maps?saddr={0},{1}&daddr={2},{3}".format(self.latitude,
                                                                                       self.longitude,
@@ -69,7 +40,7 @@ class NotifierServer:
 
         pokemon_name = pogoidmapper.get_pokemon_name(pokemon_id)
         gamepress = "https://pokemongo.gamepress.gg/pokemon/{0}".format(pokemon_id)
-        self.notifier_queue.put((pokemon_name, distance, ivs, moves, gamepress, maps, navigation))
+        self.notifier_queue.put((pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation))
 
     def run(self):
         handler = ServerHandler
@@ -146,30 +117,58 @@ def get_simple_formatting(pokemon_name, distance, ivs, moves, gamepress, maps, n
     extra_str = ""
     if ivs and moves:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
-        extra_str = "IV: {0}/{1}/{2} {3}%\nMoves:\n* {4}\n* {5}\n{6}\n\n".format(ivs[0],
-                                                                                 ivs[1],
-                                                                                 ivs[2],
-                                                                                 iv_percent,
-                                                                                 moves[0],
-                                                                                 moves[1],
-                                                                                 gamepress)
+        extra_str = "IV: {0}/{1}/{2} {3}%\nMoves:\n* {4}\n* {5}\n{6}".format(ivs[0],
+                                                                             ivs[1],
+                                                                             ivs[2],
+                                                                             iv_percent,
+                                                                             moves[0],
+                                                                             moves[1],
+                                                                             gamepress)
 
-    distance_str = "Distance is {0}m.\n\n".format(distance) if distance else ""
+    distance_str = "Distance is {0}m.".format(distance) if distance else ""
 
-    maps_and_navigation = "Google Maps: {0}\n\nNavigation: {1}".format(maps, navigation)
+    maps = "Google Maps: {0}".format(maps) if maps else ""
+    navigation = "Navigation: {1}".format(navigation) if navigation else ""
 
     title = "{0} found!".format(pokemon_name)
-    body = "{0}{1}{2}".format(distance_str, extra_str, maps_and_navigation)
+    body = ""
+    for part in (distance_str, extra_str, maps, navigation):
+        if part:
+            if body:
+                body += "\n\n"
+            body += part
 
     return title, body
 
 
-def notify_simple(pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
+def send(session, url, body):
+    try:
+        response = session.post(url, data=urllib.urlencode(body))
+    except Exception as e:
+        print "Exception {}".format(e)
+        return False
+    else:
+        if response.status_code != 200:
+            print "Error: {} {}".format(response.status_code, response.reason)
+            return False
+        else:
+            return True
+
+
+def notify_simple(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
     title, body = get_simple_formatting(pokemon_name, distance, ivs, moves, gamepress, maps, navigation)
     print "{0}\n{1}".format(title, body)
 
 
-def notify_pushbullet(pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
+def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
+    threshold = thresholds[pokemon_id]
+
+    if distance and 0 < threshold < distance:
+        # pokemon is out of range
+        # check for perfect IV
+        if not ivs or sum(ivs) < 45: # return unless perfect
+            return
+
     title, body = get_simple_formatting(pokemon_name, distance, ivs, moves, gamepress, maps, navigation)
 
     url = 'https://api.pushbullet.com/v2/pushes'
@@ -183,28 +182,38 @@ def notify_pushbullet(pokemon_name, distance, ivs, moves, gamepress, maps, navig
         'title': title,
         'body': body,
     }
-    try:
-        response = session.post(url, data=urllib.urlencode(body))
-    except Exception as e:
-        print "Exception {}".format(e)
-    else:
-        if response.status_code != 200:
-            print "Error: {} {}".format(response.status_code, response.reason)
-        else:
-            print 'Pushbullet message sent: ' + title
-            pass
+
+    if send(session, url, body):
+        print 'Pushbullet message sent: ' + title
+
+
+def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
+    title, body = get_simple_formatting(pokemon_name, None, ivs, moves, gamepress, maps, None)
+
+    channel = extras['DISCORD_CHANNEL_ID']
+    token = extras['DISCORD_TOKEN']
+    url = 'https://discordapp.com/api/webhooks/{0}/{1}'.format(channel, token)
+    headers = {'Content-type': 'application/json'}
+
+    session = requests.Session()
+    session.headers.update(headers)
+    body = {
+        'content': body
+    }
+    if send(session, url, body):
+        print 'Discord notified: ' + title
 
 
 def notifier(methods_and_extras, q):
     while True:
         try:
             while True:
-                pokemon_name, distance, ivs, moves, gamepress, maps, navigation = q.get()
+                pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation = q.get()
                 for method_and_extra in methods_and_extras:
                     try:
                         method = method_and_extra[0]
                         extras = method_and_extra[1]
-                        method(pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras)
+                        method(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras)
                     except Exception as e1:
                         print "Exception in notifier(%s): %s", method.__name__, e1
                 q.task_done()
@@ -216,6 +225,30 @@ def get_distance(lat1, lon1, lat2, lon2):
     return int(gpxpy.geo.haversine_distance(lat1, lon1, lat2, lon2))
 
 
+def get_thresholds_and_whitelist(filename):
+    id_to_threshold = {}
+    whitelist = []
+    threshold = -1
+
+    with open(filename, 'r') as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            if line.startswith("Threshold:"):
+                threshold = int(line.split(":")[1].strip())
+            else:
+                name = line.strip()
+                if name:
+                    pokemon_id = pogoidmapper.get_pokemon_id(line.strip())
+                    id_to_threshold[pokemon_id] = threshold
+                    whitelist.append(pokemon_id)
+
+    return id_to_threshold, whitelist
+
+
+thresholds = {}
+
+
 def main():
     parser = configargparse.ArgParser()
     parser.add_argument('--host', help='Host', default='localhost')
@@ -224,10 +257,14 @@ def main():
     parser.add_argument('-lat', '--latitude', help='Latitude which will be used to determine distance to pokemons', type=float)
     parser.add_argument('-lon', '--longitude', help='Longitude which will be used to determine distance to pokemons', type=float)
     parser.add_argument('-pb', '--pushbullet', help='Set if pushbullet should be notified')
+    parser.add_argument('-dc', '--discord', help='Set if discord should be notified')
     args = parser.parse_args()
 
     if 'PUSHBULLET_API_KEY' in os.environ:
         PUSHBULLET_API_KEY = os.environ['PUSHBULLET_API_KEY']
+    if 'DISCORD_CHANNEL_ID' in os.environ and 'DISCORD_TOKEN' in os.environ:
+        DISCORD_CHANNEL_ID = os.environ['DISCORD_CHANNEL_ID']
+        DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
 
     # Define methods that will notify different services
     notify_methods = []
@@ -235,6 +272,10 @@ def main():
     if args.pushbullet:
         print "Notifying to pushbullet"
         notify_methods.append((notify_pushbullet, {'PUSHBULLET_API_KEY': PUSHBULLET_API_KEY}))
+
+    if args.discord:
+        print "Notifying to discord"
+        notify_methods.append((notify_discord, {'DISCORD_CHANNEL_ID': DISCORD_CHANNEL_ID, 'DISCORD_TOKEN': DISCORD_TOKEN}))
 
     if not notify_methods:
         print "Printing simple notifications"
@@ -248,8 +289,12 @@ def main():
     t.daemon = True
     t.start()
 
+    global thresholds
+
+    if args.whitelist:
+        thresholds, whitelist = get_thresholds_and_whitelist(args.whitelist)
     # Start the server
-    server = NotifierServer(args.host, args.port, args.latitude, args.longitude, args.whitelist, notifier_queue)
+    server = NotifierServer(args.host, args.port, args.latitude, args.longitude, whitelist, notifier_queue)
     server.run()
 
 
