@@ -174,8 +174,9 @@ def notify_simple(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, map
 
 def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
     perfect_ivs = sum(ivs) == 45 if ivs else False
+    anti_perfect_ivs = sum(ivs) == 0 if ivs else False
 
-    if not perfect_ivs:
+    if not (perfect_ivs or anti_perfect_ivs):
         if pokemon_id not in whitelists['pushbullet']:
             return
 
@@ -206,16 +207,14 @@ def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress,
 
 def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
     perfect_ivs = sum(ivs) == 45 if ivs else False
+    anti_perfect_ivs = sum(ivs) == 0 if ivs else False
 
-    if not perfect_ivs:
+    if not (perfect_ivs or anti_perfect_ivs):
         if pokemon_id not in whitelists['discord']:
             return
 
-        threshold = thresholds['discord'][pokemon_id]
-        if 0 < threshold < 1000:
-            return
-
     body = "{0} found! {1}".format(pokemon_name, maps)
+    extra_str = None
     if ivs and moves:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
         extra_str = "IV: {0}/{1}/{2} {3}% Moves: {4} - {5}. {6}".format(ivs[0],
