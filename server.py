@@ -28,19 +28,22 @@ class NotifierServer:
         """
         Processes an encountered pokemon and determines whether to send a notification or not
         """
-        pokemon_id_str = str(pokemon_id)
-        whitelisted = False
-        for whitelist in whitelists:
-            if pokemon_id_str in whitelist:
-                whitelisted = True
-                break
+        ivs = [int(extras[0]), int(extras[1]), int(extras[2])] if extras else None
+        perfect_ivs = sum(ivs) == 45 if ivs else False
+        anti_perfect_ivs = sum(ivs) == 0 if ivs else False
 
-        if not whitelisted:
-            return
+        if not (perfect_ivs or anti_perfect_ivs):
+            whitelisted = False
+            for whitelist in whitelists.values():
+                if pokemon_id in whitelist:
+                    whitelisted = True
+                    break
+
+            if not whitelisted:
+                return
 
         self.cache[encounter] = 1  # cache it
 
-        ivs = [extras[0], extras[1], extras[2]] if extras else None
         maps = "http://www.google.com/maps/place/{0},{1}".format(latitude, longitude)
         navigation = "http://maps.google.com/maps?saddr={0},{1}&daddr={2},{3}".format(self.latitude,
                                                                                       self.longitude,
@@ -50,7 +53,7 @@ class NotifierServer:
 
         pokemon_name = pogoidmapper.get_pokemon_name(pokemon_id)
         gamepress = "https://pokemongo.gamepress.gg/pokemon/{0}".format(pokemon_id)
-        self.notifier_queue.put((pokemon_id_str, pokemon_name, distance, ivs, moves, gamepress, maps, navigation))
+        self.notifier_queue.put((str(pokemon_id), pokemon_name, distance, ivs, moves, gamepress, maps, navigation))
 
     def run(self):
         handler = ServerHandler
