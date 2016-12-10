@@ -28,6 +28,15 @@ class NotifierServer:
         """
         Processes an encountered pokemon and determines whether to send a notification or not
         """
+        whitelisted = False
+        for whitelist in whitelists:
+            if pokemon_id in whitelist:
+                whitelisted = True
+                break
+
+        if not whitelisted:
+            return
+
         self.cache[encounter] = 1  # cache it
 
         ivs = [extras[0], extras[1], extras[2]] if extras else None
