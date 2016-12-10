@@ -28,9 +28,10 @@ class NotifierServer:
         """
         Processes an encountered pokemon and determines whether to send a notification or not
         """
+        pokemon_id_str = str(pokemon_id)
         whitelisted = False
         for whitelist in whitelists:
-            if pokemon_id in whitelist:
+            if pokemon_id_str in whitelist:
                 whitelisted = True
                 break
 
@@ -49,7 +50,7 @@ class NotifierServer:
 
         pokemon_name = pogoidmapper.get_pokemon_name(pokemon_id)
         gamepress = "https://pokemongo.gamepress.gg/pokemon/{0}".format(pokemon_id)
-        self.notifier_queue.put((str(pokemon_id), pokemon_name, distance, ivs, moves, gamepress, maps, navigation))
+        self.notifier_queue.put((pokemon_id_str, pokemon_name, distance, ivs, moves, gamepress, maps, navigation))
 
     def run(self):
         handler = ServerHandler
