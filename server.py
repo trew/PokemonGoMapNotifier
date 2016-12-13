@@ -22,7 +22,7 @@ class NotifierServer:
         self.longitude = longitude
         self.whitelist = whitelist
         self.notifier_queue = notifier_queue
-        self.cache = LRUCache(maxsize=20)
+        self.cache = LRUCache(maxsize=100)
 
     def process(self, pokemon_id, distance, latitude, longitude, extras, encounter):
         """
@@ -339,12 +339,12 @@ def main():
     global thresholds
     global whitelists
 
-    if args.pushbullet_whitelist:
+    if args.pushbullet_whitelist and args.pushbullet:
         ths, wl = get_thresholds_and_whitelist(args.pushbullet_whitelist)
         whitelists['pushbullet'] = wl
         thresholds['pushbullet'] = ths
 
-    if args.discord_whitelist:
+    if args.discord_whitelist and args.discord:
         ths, wl = get_thresholds_and_whitelist(args.discord_whitelist)
         whitelists['discord'] = wl
         thresholds['discord'] = ths
