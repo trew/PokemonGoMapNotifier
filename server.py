@@ -42,6 +42,8 @@ class NotifierServer:
             if not whitelisted:
                 return
 
+        if encounter in self.cache:
+            return
         self.cache[encounter] = 1  # cache it
 
         maps = "http://www.google.com/maps/place/{0},{1}".format(latitude, longitude)
