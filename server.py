@@ -12,35 +12,46 @@ import gpxpy.geo
 import BaseHTTPServer
 import SocketServer
 import pogoidmapper
+import config
+import datetime
 
 
 class NotifierServer:
-    def __init__(self, host, port, latitude, longitude, whitelist, notifier_queue):
+    def __init__(self, host, port, latitude, longitude, notifier_queue):
         self.host = host
         self.port = port
         self.latitude = latitude
         self.longitude = longitude
-        self.whitelist = whitelist
         self.notifier_queue = notifier_queue
         self.cache = LRUCache(maxsize=100)
 
-    def process(self, pokemon_id, distance, latitude, longitude, extras, encounter):
+    def process(self, message):
         """
         Processes an encountered pokemon and determines whether to send a notification or not
         """
-        ivs = [int(extras[0]), int(extras[1]), int(extras[2])] if extras else None
-        perfect_ivs = sum(ivs) == 45 if ivs else False
-        anti_perfect_ivs = sum(ivs) == 0 if ivs else False
+        accepted = False
+        for whitelist in config.whitelists.values():
+            if accept(message, whitelist):
+                accepted = True
+                break
 
-        if not (perfect_ivs or anti_perfect_ivs):
-            whitelisted = False
-            for whitelist in whitelists.values():
-                if pokemon_id in whitelist:
-                    whitelisted = True
-                    break
+        if not accepted:
+            return
 
-            if not whitelisted:
-                return
+        pokemon_id = message['pokemon_id']
+        pokemon_name = pogoidmapper.get_pokemon_name(pokemon_id)
+        encounter = message['encounter_id']
+        if encounter in self.cache:
+            print "{} cached. Skipping notification. Encounter: {}".format(pokemon_name, encounter)
+            return
+
+        latitude = message['latitude']
+        longitude = message['longitude']
+        ivs = [int(message['individual_attack']), int(message['individual_defense']),
+               int(message['individual_stamina'])] if message[
+            'individual_attack'] else None
+        moves = [pogoidmapper.get_move_name(message['move_1']), pogoidmapper.get_move_name(message['move_2'])] if \
+            message['move_1'] else None
 
         if encounter in self.cache:
             return
@@ -51,18 +62,24 @@ class NotifierServer:
                                                                                       self.longitude,
                                                                                       latitude,
                                                                                       longitude)
-        moves = [pogoidmapper.get_move_name(extras[3]), pogoidmapper.get_move_name(extras[4])] if extras else None
 
-        pokemon_name = pogoidmapper.get_pokemon_name(pokemon_id)
         gamepress = "https://pokemongo.gamepress.gg/pokemon/{0}".format(pokemon_id)
-        self.notifier_queue.put((str(pokemon_id), pokemon_name, distance, ivs, moves, gamepress, maps, navigation))
+
+        message.update({
+            'gamepress': gamepress,
+            'maps': maps,
+            'navigation': navigation,
+            'ivs': ivs,
+            'moves': moves
+        })
+        self.notifier_queue.put(message)
 
     def run(self):
         handler = ServerHandler
         httpd = SocketServer.TCPServer((self.host, self.port), handler)
         httpd.notifier_server = self
 
-        print "Serving at: http://{0}:{1}".format(self.host, self.port)
+        print "Serving at: http://{}:{}".format(self.host, self.port)
         httpd.serve_forever()
 
 
@@ -81,7 +98,7 @@ class ServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_POST(self):
         """
-        Processes encountered pokemons, and sends them over to the notifier server if it passed whitelist check
+        Processes encountered pokemons, and sends them over to the notifier server
         """
 
         if self.headers['content-type'] == 'application/json':
@@ -93,58 +110,73 @@ class ServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             if type == 'pokemon':
                 message = data['message']
                 pokemon_id = message['pokemon_id']
-                encounter = message['encounter_id']
-                move_1 = message['move_1']
-                extras = None
 
-                # have this exact encounter been processed recently?
-                if encounter not in self.server.notifier_server.cache.keys():
+                latitude = message['latitude']
+                longitude = message['longitude']
 
-                    if move_1:
-                        move_2 = message['move_2']
-                        iv_att = message['individual_attack']
-                        iv_def = message['individual_defense']
-                        iv_sta = message['individual_stamina']
-                        extras = (iv_att, iv_def, iv_sta, move_1, move_2)
+                has_distance = self.server.notifier_server.latitude and self.server.notifier_server.longitude
+                distance = get_distance(float(self.server.notifier_server.latitude),
+                                        float(self.server.notifier_server.longitude),
+                                        float(latitude),
+                                        float(longitude)) if has_distance else None
 
-                    latitude = message['latitude']
-                    longitude = message['longitude']
+                message.update({
+                    'pokemon_id': int(message['pokemon_id']),
+                    'name': pogoidmapper.get_pokemon_name(pokemon_id),
+                    'distance': distance,
+                })
 
-                    has_distance = self.server.notifier_server.latitude and self.server.notifier_server.longitude
-                    distance = get_distance(float(self.server.notifier_server.latitude),
-                                            float(self.server.notifier_server.longitude),
-                                            float(latitude),
-                                            float(longitude)) if has_distance else None
-
-                    self.server.notifier_server.process(pokemon_id, distance, latitude, longitude, extras,
-                                                        encounter)
+                self.server.notifier_server.process(message)
 
         self.send_response(200)
         self.end_headers()
 
 
-def get_simple_formatting(pokemon_name, distance, ivs, moves, gamepress, maps, navigation):
+def get_simple_formatting(message):
     """
     Processes an encountered pokemon and determines whether to send a notification or not
     """
 
+    pokemon_name = message['name']
+    distance = message['distance']
+    ivs = message['ivs']
+    moves = message['moves']
+    gamepress = message['gamepress']
+    maps = message['maps']
+    navigation = message['navigation']
+    disappear_time = message['disappear_time']
+    time_detail = message.get('time_detail', -1)
+
+    disappear_datetime = datetime.datetime.fromtimestamp(disappear_time)
+    #now = datetime.datetime.fromtimestamp(disappear_time - 60 * 30)
+    now = datetime.datetime.now()
+
+    tth = disappear_datetime - now
+    seconds = tth.total_seconds()
+    minutes, seconds = divmod(seconds, 60)
+    tth_str = "%02d:%02d" % (minutes, seconds)
+    if time_detail < 0:
+        tth_str += " (This time is insecure!)"
+
     extra_str = ""
     if ivs and moves:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
-        extra_str = "IV: {0}/{1}/{2} {3}%\nMoves:\n* {4}\n* {5}\n{6}".format(ivs[0],
-                                                                             ivs[1],
-                                                                             ivs[2],
-                                                                             iv_percent,
-                                                                             moves[0],
-                                                                             moves[1],
-                                                                             gamepress)
+        extra_str = "IV: {}/{}/{} {}%\nMoves:\n* {}\n* {}\n{}".format(ivs[0],
+                                                                      ivs[1],
+                                                                      ivs[2],
+                                                                      iv_percent,
+                                                                      moves[0],
+                                                                      moves[1],
+                                                                      gamepress)
 
-    distance_str = "Distance is {0}m.".format(distance) if distance else ""
+    distance_str = "Distance is {}m.".format(distance) if distance else ""
 
-    maps = "Google Maps: {0}".format(maps) if maps else ""
-    navigation = "Navigation: {0}".format(navigation) if navigation else ""
+    maps = "Google Maps: {}".format(maps) if maps else ""
+    navigation = "Navigation: {}".format(navigation) if navigation else ""
 
-    title = "{0} found!".format(pokemon_name)
+    if ivs and sum(ivs) == 45:
+        title = "Perfect "
+    title = "{} found! Time left: {}".format(pokemon_name, tth_str)
     body = ""
     for part in (distance_str, extra_str, maps, navigation):
         if part:
@@ -169,32 +201,36 @@ def send(session, url, body):
             return True
 
 
-def notify_simple(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
-    title, body = get_simple_formatting(pokemon_name, distance, ivs, moves, gamepress, maps, navigation)
-    print "{0}\n{1}".format(title, body)
+def notify_simple(message):
+    title, body = get_simple_formatting(message)
+    print "{}\n{}".format(title, body)
 
 
-def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
+def notify_pushbullet(message):
+    ivs = message['ivs']
+    pokemon_id = message['pokemon_id']
+    distance = message['distance']
+
     perfect_ivs = sum(ivs) == 45 if ivs else False
     anti_perfect_ivs = sum(ivs) == 0 if ivs else False
 
     if not (perfect_ivs or anti_perfect_ivs):
-        if pokemon_id not in whitelists['pushbullet']:
+        if pokemon_id not in config.whitelists['pushbullet']:
             return
 
-        threshold = thresholds['pushbullet'][pokemon_id]
+        threshold = config.thresholds['pushbullet'][pokemon_id]
 
         if distance and 0 < threshold < distance:
             # pokemon is out of range
             return
 
-    title, body = get_simple_formatting(pokemon_name, distance, ivs, moves, gamepress, maps, navigation)
+    title, body = get_simple_formatting(message['name'], message['distance'], message['ivs'], message['moves'],
+                                        message['gamepress'], message['maps'], message['navigation'])
 
     url = 'https://api.pushbullet.com/v2/pushes'
     headers = {'Content-type': 'application/x-www-form-urlencoded'}
-    API_KEY = extras['PUSHBULLET_API_KEY']
     session = requests.Session()
-    session.auth = (API_KEY, '')
+    session.auth = (config.PUSHBULLET_API_KEY, '')
     session.headers.update(headers)
     body = {
         'type': 'note',
@@ -207,30 +243,89 @@ def notify_pushbullet(pokemon_id, pokemon_name, distance, ivs, moves, gamepress,
         print 'Pushbullet message sent: ' + title
 
 
-def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras):
+def accept(message, whitelist):
+    ivs = None
+    if message.get('individual_attack'):
+        ivs = [int(message['individual_attack']), int(message['individual_defense']), int(message['individual_stamina'])]
+
+    cp = message.get('cp')
+    pokemon_name = pogoidmapper.get_pokemon_name(str(message['pokemon_id']))
+    quick_move = pogoidmapper.get_move_name(message.get('move_1')) if 'move_1' in message else None
+    charge_move = pogoidmapper.get_move_name(message.get('move_2')) if 'move_2' in message else None
+
     perfect_ivs = sum(ivs) == 45 if ivs else False
     anti_perfect_ivs = sum(ivs) == 0 if ivs else False
 
-    if not (perfect_ivs or anti_perfect_ivs):
-        if pokemon_id not in whitelists['discord']:
-            return
+    notify_on_perfect_iv = whitelist.get('config', {}).get('notify_on_perfect_iv', False)
+    notify_on_zero_iv = whitelist.get('config', {}).get('notify_on_zero_iv', False)
+    if notify_on_perfect_iv and perfect_ivs:
+        return True
+    if notify_on_zero_iv and anti_perfect_ivs:
+        return True
 
-    body = "{0} found! {1}".format(pokemon_name, maps)
+    include = whitelist.get('include', [])
+    exclude = whitelist.get('exclude', [])  # todo, not supported yet
+    for element in include:
+        if pokemon_name != element.get('name', None):
+            continue
+        if cp > element.get('max_cp', 9999):
+            continue
+        if cp < element.get('min_cp', 0):
+            continue
+        if 'quick_move' in element and quick_move != element.get('quick_move'):
+            continue
+        if 'charge_move' in element and charge_move != element.get('charge_move'):
+            continue
+
+        return True
+
+
+def notify_discord(message):
+    whitelist = config.whitelists['discord']
+    if not accept(message, whitelist):
+        return
+    ivs = message.get('ivs')
+
+    perfect_ivs = sum(ivs) == 45 if ivs else False
+    anti_perfect_ivs = sum(ivs) == 0 if ivs else False
+
+    if perfect_ivs:
+        body = "Perfect "
+    elif anti_perfect_ivs:
+        body = "Shittiest possible "
+    else:
+        body = ""
+
+    disappear_time = message['disappear_time']
+    time_detail = message.get('time_detail', -1)
+
+    disappear_datetime = datetime.datetime.fromtimestamp(disappear_time)
+    #now = datetime.datetime.fromtimestamp(disappear_time - 60 * 30)
+    now = datetime.datetime.now()
+
+    tth = disappear_datetime - now
+    seconds = tth.total_seconds()
+    minutes, seconds = divmod(seconds, 60)
+    tth_str = "%02d:%02d" % (minutes, seconds)
+    if time_detail < 0:
+        tth_str += " (This time is insecure!)"
+
+    body += "{} found! Time left: {} {}".format(message['name'], tth_str, message['maps'])
     extra_str = None
-    if ivs and moves:
+    if ivs and message['moves']:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
-        extra_str = "IV: {0}/{1}/{2} {3}% Moves: {4} - {5}. {6}".format(ivs[0],
-                                                                        ivs[1],
-                                                                        ivs[2],
-                                                                        iv_percent,
-                                                                        moves[0],
-                                                                        moves[1],
-                                                                        gamepress)
-    body += "\n{0}".format(extra_str) if extra_str else ""
+        extra_str = "IV: {}/{}/{} {}% Moves: {} - {}. {}".format(ivs[0],
+                                                                 ivs[1],
+                                                                 ivs[2],
+                                                                 iv_percent,
+                                                                 message['moves'][0],
+                                                                 message['moves'][1],
+                                                                 message['gamepress'])
+    body += "\n{}".format(extra_str) if extra_str else ""
 
-    channel = extras['DISCORD_CHANNEL_ID']
-    token = extras['DISCORD_TOKEN']
-    url = 'https://discordapp.com/api/webhooks/{0}/{1}'.format(channel, token)
+    channel = config.DISCORD_CHANNEL_ID
+    token = config.DISCORD_TOKEN
+    url = 'https://discordapp.com/api/webhooks/{}/{}'.format(channel, token)
     headers = {'Content-type': 'application/json'}
 
     session = requests.Session()
@@ -245,18 +340,16 @@ def notify_discord(pokemon_id, pokemon_name, distance, ivs, moves, gamepress, ma
         print 'Discord notified: ' + body
 
 
-def notifier(methods_and_extras, q):
+def notifier(methods, q):
     while True:
         try:
             while True:
-                pokemon_id, pokemon_name, distance, ivs, moves, gamepress, maps, navigation = q.get()
-                for method_and_extra in methods_and_extras:
+                message = q.get()
+                for method in methods:
                     try:
-                        method = method_and_extra[0]
-                        extras = method_and_extra[1]
-                        method(int(pokemon_id), pokemon_name, distance, ivs, moves, gamepress, maps, navigation, extras)
+                        method(message)
                     except Exception as e1:
-                        print "Exception in notifier(%s): %s", method.__name__, e1
+                        print "Exception in notifier({}): {}".format(method.__name__, e1)
                 q.task_done()
         except Exception as e:
             print "Exception in notifier: %s", e
@@ -288,17 +381,14 @@ def get_thresholds_and_whitelist(filename):
     return id_to_threshold, whitelist
 
 
-thresholds = {}
-whitelists = {}
-
 def main():
     parser = configargparse.ArgParser()
     parser.add_argument('--host', help='Host', default='localhost')
     parser.add_argument('-p', '--port', help='Port', type=int, default=8000)
-    parser.add_argument('-pbwl', '--pushbullet-whitelist', help='Whitelist file', default='whitelist.txt')
-    parser.add_argument('-dcwl', '--discord-whitelist', help='Whitelist file', default='whitelist.txt')
-    parser.add_argument('-lat', '--latitude', help='Latitude which will be used to determine distance to pokemons', type=float)
-    parser.add_argument('-lon', '--longitude', help='Longitude which will be used to determine distance to pokemons', type=float)
+    parser.add_argument('-lat', '--latitude', help='Latitude which will be used to determine distance to pokemons',
+                        type=float)
+    parser.add_argument('-lon', '--longitude', help='Longitude which will be used to determine distance to pokemons',
+                        type=float)
     parser.add_argument('-loc', '--location', help='Location. Latitude,Longitude format')
     parser.add_argument('-pb', '--pushbullet', help='Set if pushbullet should be notified')
     parser.add_argument('-dc', '--discord', help='Set if discord should be notified')
@@ -309,26 +399,20 @@ def main():
         args.latitude = split[0]
         args.longitude = split[1]
 
-    if 'PUSHBULLET_API_KEY' in os.environ:
-        PUSHBULLET_API_KEY = os.environ['PUSHBULLET_API_KEY']
-    if 'DISCORD_CHANNEL_ID' in os.environ and 'DISCORD_TOKEN' in os.environ:
-        DISCORD_CHANNEL_ID = os.environ['DISCORD_CHANNEL_ID']
-        DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
-
     # Define methods that will notify different services
     notify_methods = []
 
     if args.pushbullet:
         print "Notifying to pushbullet"
-        notify_methods.append((notify_pushbullet, {'PUSHBULLET_API_KEY': PUSHBULLET_API_KEY}))
+        notify_methods.append(notify_pushbullet)
 
     if args.discord:
         print "Notifying to discord"
-        notify_methods.append((notify_discord, {'DISCORD_CHANNEL_ID': DISCORD_CHANNEL_ID, 'DISCORD_TOKEN': DISCORD_TOKEN}))
+        notify_methods.append(notify_discord)
 
     if not notify_methods:
         print "Printing simple notifications"
-        notify_methods.append((notify_simple, {}))
+        notify_methods.append(notify_simple)
 
     # set up the notification thread
     notifier_queue = Queue()
@@ -338,24 +422,10 @@ def main():
     t.daemon = True
     t.start()
 
-    global thresholds
-    global whitelists
-
-    if args.pushbullet_whitelist and args.pushbullet:
-        ths, wl = get_thresholds_and_whitelist(args.pushbullet_whitelist)
-        whitelists['pushbullet'] = wl
-        thresholds['pushbullet'] = ths
-
-    if args.discord_whitelist and args.discord:
-        ths, wl = get_thresholds_and_whitelist(args.discord_whitelist)
-        whitelists['discord'] = wl
-        thresholds['discord'] = ths
-
     # Start the server
-    server = NotifierServer(args.host, args.port, args.latitude, args.longitude, whitelists, notifier_queue)
+    server = NotifierServer(args.host, args.port, args.latitude, args.longitude, notifier_queue)
     server.run()
 
 
 if __name__ == '__main__':
     main()
-
