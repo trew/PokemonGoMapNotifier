@@ -3,3 +3,4 @@
 .idea
 whitelist*.txt
 config/local.py
+log.txt

@@ -14,6 +14,7 @@ import SocketServer
 import pogoidmapper
 import config
 import datetime
+import logging
 
 
 class NotifierServer:
@@ -47,11 +48,28 @@ class NotifierServer:
 
         latitude = message['latitude']
         longitude = message['longitude']
-        ivs = [int(message['individual_attack']), int(message['individual_defense']),
-               int(message['individual_stamina'])] if message[
-            'individual_attack'] else None
-        moves = [pogoidmapper.get_move_name(message['move_1']), pogoidmapper.get_move_name(message['move_2'])] if \
-            message['move_1'] else None
+        ivs = None
+        moves = None
+        if 'individual_attack' in message:
+            if ivs is None:
+                ivs = [-1, -1, -1]
+            ivs[0] = int(message['individual_attack'])
+        if 'individual_defense' in message:
+            if ivs is None:
+                ivs = [-1, -1, -1]
+            ivs[1] = int(message['individual_defense'])
+        if 'individual_stamina' in message:
+            if ivs is None:
+                ivs = [-1, -1, -1]
+            ivs[2] = int(message['individual_stamina'])
+        if 'move_1' in message:
+            if moves is None:
+                moves = ["uk", "uk"]
+            moves[0] = pogoidmapper.get_move_name(message['move_1'])
+        if 'move_2' in message:
+            if moves is None:
+                moves = ["uk", "uk"]
+            moves[1] = pogoidmapper.get_move_name(message['move_2'])
 
         if encounter in self.cache:
             return
@@ -148,7 +166,7 @@ def get_simple_formatting(message):
     time_detail = message.get('time_detail', -1)
 
     disappear_datetime = datetime.datetime.fromtimestamp(disappear_time)
-    #now = datetime.datetime.fromtimestamp(disappear_time - 60 * 30)
+    # now = datetime.datetime.fromtimestamp(disappear_time - 60 * 30)
     now = datetime.datetime.now()
 
     tth = disappear_datetime - now
@@ -246,12 +264,13 @@ def notify_pushbullet(message):
 def accept(message, whitelist):
     ivs = None
     if message.get('individual_attack'):
-        ivs = [int(message['individual_attack']), int(message['individual_defense']), int(message['individual_stamina'])]
+        ivs = [int(message['individual_attack']), int(message['individual_defense']),
+               int(message['individual_stamina'])]
 
     cp = message.get('cp')
     pokemon_name = pogoidmapper.get_pokemon_name(str(message['pokemon_id']))
-    quick_move = pogoidmapper.get_move_name(message.get('move_1')) if 'move_1' in message else None
-    charge_move = pogoidmapper.get_move_name(message.get('move_2')) if 'move_2' in message else None
+    quick_move = pogoidmapper.get_move_name(message['move_1']) if 'move_1' in message else None
+    charge_move = pogoidmapper.get_move_name(message['move_2']) if 'move_2' in message else None
 
     perfect_ivs = sum(ivs) == 45 if ivs else False
     anti_perfect_ivs = sum(ivs) == 0 if ivs else False
@@ -285,6 +304,7 @@ def notify_discord(message):
     if not accept(message, whitelist):
         return
     ivs = message.get('ivs')
+    moves = message.get('moves')
 
     perfect_ivs = sum(ivs) == 45 if ivs else False
     anti_perfect_ivs = sum(ivs) == 0 if ivs else False
@@ -300,7 +320,7 @@ def notify_discord(message):
     time_detail = message.get('time_detail', -1)
 
     disappear_datetime = datetime.datetime.fromtimestamp(disappear_time)
-    #now = datetime.datetime.fromtimestamp(disappear_time - 60 * 30)
+    # now = datetime.datetime.fromtimestamp(disappear_time - 60 * 30)
     now = datetime.datetime.now()
 
     tth = disappear_datetime - now
@@ -312,17 +332,20 @@ def notify_discord(message):
     time_str = "Disappears in: {} ({})".format(tth_str, disappear_datetime.strftime('%H:%M:%S'))
 
     body += "{} found! {} {}".format(message['name'], time_str, message['maps'])
-    extra_str = None
-    if ivs and message['moves']:
+    extra_str = ""
+    if ivs and moves:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
-        extra_str = "IV: {}/{}/{} {}% Moves: {} - {}. {}".format(ivs[0],
-                                                                 ivs[1],
-                                                                 ivs[2],
-                                                                 iv_percent,
-                                                                 message['moves'][0],
-                                                                 message['moves'][1],
-                                                                 message['gamepress'])
-    body += "\n{}".format(extra_str) if extra_str else ""
+        extra_str = "\nIV: {}/{}/{} {}% Moves: {} - {}. {}".format(ivs[0],
+                                                                   ivs[1],
+                                                                   ivs[2],
+                                                                   iv_percent,
+                                                                   moves[0],
+                                                                   moves[1],
+                                                                   message['gamepress'])
+    else:
+        discord_log.warn("IVs: {} Moves: {} ExtraStr: {}".format(ivs, moves, extra_str))
+        discord_log.warn(str(message))
+    body += extra_str
 
     channel = config.DISCORD_CHANNEL_ID
     token = config.DISCORD_TOKEN
@@ -336,7 +359,9 @@ def notify_discord(message):
     }
 
     body = json.dumps(body)
+    discord_log.info('Discord notified: ' + body)
     if send(session, url, body):
+        discord_log.info(body)
         body = body[13:body.find("found!")]
         print 'Discord notified: ' + body
 
@@ -382,7 +407,14 @@ def get_thresholds_and_whitelist(filename):
     return id_to_threshold, whitelist
 
 
+discord_log = logging.getLogger('discord')
+
+
 def main():
+    logging.basicConfig(filename='log.txt', level=10) # debug logging
+    global discord_log
+    discord_log = logging.getLogger('discord')
+
     parser = configargparse.ArgParser()
     parser.add_argument('--host', help='Host', default='localhost')
     parser.add_argument('-p', '--port', help='Port', type=int, default=8000)
