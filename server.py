@@ -268,9 +268,9 @@ def accept(message, whitelist):
     for element in include:
         if pokemon_name != element.get('name', None):
             continue
-        if cp > element.get('max_cp', 9999):
+        if 'max_cp' in element and cp and cp > element.get('max_cp', 9999):
             continue
-        if cp < element.get('min_cp', 0):
+        if 'min_cp' in element and cp and cp < element.get('min_cp', 0):
             continue
         if 'quick_move' in element and quick_move != element.get('quick_move'):
             continue
@@ -309,8 +309,9 @@ def notify_discord(message):
     tth_str = "%02d:%02d" % (minutes, seconds)
     if time_detail < 0:
         tth_str += " (This time is insecure!)"
+    time_str = "Disappears in: {} ({})".format(tth_str, disappear_datetime.strftime('%H:%M:%S'))
 
-    body += "{} found! Time left: {} {}".format(message['name'], tth_str, message['maps'])
+    body += "{} found! {} {}".format(message['name'], time_str, message['maps'])
     extra_str = None
     if ivs and message['moves']:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
