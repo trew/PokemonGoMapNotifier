@@ -163,7 +163,6 @@ def get_simple_formatting(message):
     maps = message['maps']
     navigation = message['navigation']
     disappear_time = message['disappear_time']
-    time_detail = message.get('time_detail', -1)
 
     disappear_datetime = datetime.datetime.fromtimestamp(disappear_time)
     # now = datetime.datetime.fromtimestamp(disappear_time - 60 * 30)
@@ -173,8 +172,6 @@ def get_simple_formatting(message):
     seconds = tth.total_seconds()
     minutes, seconds = divmod(seconds, 60)
     tth_str = "%02d:%02d" % (minutes, seconds)
-    if time_detail < 0:
-        tth_str += " (This time is insecure!)"
 
     extra_str = ""
     if ivs and moves:
@@ -317,7 +314,6 @@ def notify_discord(message):
         body = ""
 
     disappear_time = message['disappear_time']
-    time_detail = message.get('time_detail', -1)
 
     disappear_datetime = datetime.datetime.fromtimestamp(disappear_time)
     # now = datetime.datetime.fromtimestamp(disappear_time - 60 * 30)
@@ -327,8 +323,6 @@ def notify_discord(message):
     seconds = tth.total_seconds()
     minutes, seconds = divmod(seconds, 60)
     tth_str = "%02d:%02d" % (minutes, seconds)
-    if time_detail < 0:
-        tth_str += " (This time is insecure!)"
     time_str = "Disappears in: {} ({})".format(tth_str, disappear_datetime.strftime('%H:%M:%S'))
 
     body += "{} found! {} {}".format(message['name'], time_str, message['maps'])
