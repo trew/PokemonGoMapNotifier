@@ -50,23 +50,23 @@ class NotifierServer:
         longitude = message['longitude']
         ivs = None
         moves = None
-        if 'individual_attack' in message:
+        if 'individual_attack' in message and message['individual_attack'] is not None:
             if ivs is None:
                 ivs = [-1, -1, -1]
             ivs[0] = int(message['individual_attack'])
-        if 'individual_defense' in message:
+        if 'individual_defense' in message and message['individual_defense'] is not None:
             if ivs is None:
                 ivs = [-1, -1, -1]
             ivs[1] = int(message['individual_defense'])
-        if 'individual_stamina' in message:
+        if 'individual_stamina' in message and message['individual_stamina'] is not None:
             if ivs is None:
                 ivs = [-1, -1, -1]
             ivs[2] = int(message['individual_stamina'])
-        if 'move_1' in message:
+        if 'move_1' in message and message['move_1'] is not None:
             if moves is None:
                 moves = ["uk", "uk"]
             moves[0] = pogoidmapper.get_move_name(message['move_1'])
-        if 'move_2' in message:
+        if 'move_2' in message and message['move_2'] is not None:
             if moves is None:
                 moves = ["uk", "uk"]
             moves[1] = pogoidmapper.get_move_name(message['move_2'])
