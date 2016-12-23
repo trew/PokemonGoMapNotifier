@@ -284,9 +284,9 @@ def accept(message, whitelist):
     for element in include:
         if pokemon_name != element.get('name', None):
             continue
-        if 'max_cp' in element and cp and cp > element.get('max_cp', 9999):
+        if 'max_cp' in element and (not cp or cp > element.get('max_cp', 9999)):
             continue
-        if 'min_cp' in element and cp and cp < element.get('min_cp', 0):
+        if 'min_cp' in element and (not cp or cp < element.get('min_cp', 0)):
             continue
         if 'quick_move' in element and quick_move != element.get('quick_move'):
             continue
