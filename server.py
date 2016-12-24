@@ -5,7 +5,7 @@ import requests
 import urllib
 import os
 import simplejson as json
-from queue import Queue
+from Queue import Queue
 from threading import Thread
 from cachetools import LRUCache
 import gpxpy.geo
@@ -25,6 +25,28 @@ class NotifierServer:
         self.longitude = longitude
         self.notifier_queue = notifier_queue
         self.cache = LRUCache(maxsize=100)
+
+    def sublocality(self, latitude, longitude):
+        base = "http://maps.googleapis.com/maps/api/geocode/json?"
+        params = "latlng={lat},{lon}&sensor={sen}".format(
+						lat=latitude,
+						lon=longitude,
+						sen='true'
+				)
+        url = "{base}{params}".format(base=base, params=params)
+        response = requests.get(url)
+
+        for result in response.json()['results']:
+            if 'address_components' in result:
+                address_components = result['address_components']
+
+                for address in address_components:
+                    addressTypes = address['types']
+
+                    if 'sublocality' in addressTypes:
+                        return address['long_name']
+
+        return ""
 
     def process(self, message):
         """
@@ -75,8 +97,9 @@ class NotifierServer:
             return
         self.cache[encounter] = 1  # cache it
 
-        maps = "http://www.google.com/maps/place/{0},{1}".format(latitude, longitude)
-        navigation = "http://maps.google.com/maps?saddr={0},{1}&daddr={2},{3}".format(self.latitude,
+        maps = "https://www.google.com/maps/place/{0},{1}".format(latitude, longitude)
+        staticMaps = "https://maps.googleapis.com/maps/api/staticmap?markers={},{}&zoom=15&size=544x424".format(latitude, longitude)
+        navigation = "https://maps.google.com/maps?saddr={0},{1}&daddr={2},{3}".format(self.latitude,
                                                                                       self.longitude,
                                                                                       latitude,
                                                                                       longitude)
@@ -86,6 +109,8 @@ class NotifierServer:
         message.update({
             'gamepress': gamepress,
             'maps': maps,
+            'staticMaps': staticMaps,
+            'sublocality': self.sublocality(latitude, longitude),
             'navigation': navigation,
             'ivs': ivs,
             'moves': moves
@@ -161,6 +186,7 @@ def get_simple_formatting(message):
     moves = message['moves']
     gamepress = message['gamepress']
     maps = message['maps']
+    sublocality = message['sublocality']
     navigation = message['navigation']
     disappear_time = message['disappear_time']
 
@@ -186,7 +212,7 @@ def get_simple_formatting(message):
 
     distance_str = "Distance is {}m.".format(distance) if distance else ""
 
-    maps = "Google Maps: {}".format(maps) if maps else ""
+    maps = "Google Maps: {}{}".format(maps, " in " + sublocality if sublocality != "" else "") if maps else ""
     navigation = "Navigation: {}".format(navigation) if navigation else ""
 
     if ivs and sum(ivs) == 45:
@@ -240,7 +266,7 @@ def notify_pushbullet(message):
             return
 
     title, body = get_simple_formatting(message['name'], message['distance'], message['ivs'], message['moves'],
-                                        message['gamepress'], message['maps'], message['navigation'])
+                                        message['gamepress'], message['maps'], message['navigation'], message['sublocality'])
 
     url = 'https://api.pushbullet.com/v2/pushes'
     headers = {'Content-type': 'application/x-www-form-urlencoded'}
@@ -323,23 +349,23 @@ def notify_discord(message):
     seconds = tth.total_seconds()
     minutes, seconds = divmod(seconds, 60)
     tth_str = "%02d:%02d" % (minutes, seconds)
-    time_str = "Disappears in: {} ({})".format(tth_str, disappear_datetime.strftime('%H:%M:%S'))
+    time_str = "Disappears in: {} (**{}**)".format(tth_str, disappear_datetime.strftime('%H:%M:%S'))
 
-    body += "{} found! {} {}".format(message['name'], time_str, message['maps'])
+    body += "**{}** found{}!\n\n{}".format(message['name'], " in **" + message['sublocality'] + "**" if message['sublocality'] != "" else "", time_str)
     extra_str = ""
     if ivs and moves:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
-        extra_str = "\nIV: {}/{}/{} {}% Moves: {} - {}. {}".format(ivs[0],
+        extra_str = "\n\nIV: {}/{}/{} **{}%**\nMoves: {} - {}.\n\n".format(ivs[0],
                                                                    ivs[1],
                                                                    ivs[2],
                                                                    iv_percent,
                                                                    moves[0],
-                                                                   moves[1],
-                                                                   message['gamepress'])
+                                                                   moves[1])
     else:
         discord_log.warn("IVs: {} Moves: {} ExtraStr: {}".format(ivs, moves, extra_str))
         discord_log.warn(str(message))
     body += extra_str
+    body += "{}\n\n{}\n\n{}".format(message['gamepress'], message['maps'], message['staticMaps'])
 
     channel = config.DISCORD_CHANNEL_ID
     token = config.DISCORD_TOKEN
