@@ -48,6 +48,12 @@ class NotifierServer:
 
         return ""
 
+    def shortUrl(self, url):
+				post_url = 'https://www.googleapis.com/urlshortener/v1/url?key={}'.format(config.GOOGLE_SHORTENER_KEY)
+				payload = {'longUrl': url}
+				r = requests.post(post_url, data=json.dumps(payload), headers={'content-type': 'application/json'})
+				return r.json()['id']
+
     def process(self, message):
         """
         Processes an encountered pokemon and determines whether to send a notification or not
@@ -97,14 +103,14 @@ class NotifierServer:
             return
         self.cache[encounter] = 1  # cache it
 
-        maps = "https://www.google.com/maps/place/{0},{1}".format(latitude, longitude)
-        staticMaps = "https://maps.googleapis.com/maps/api/staticmap?markers={},{}&zoom=15&size=544x424".format(latitude, longitude)
-        navigation = "https://maps.google.com/maps?saddr={0},{1}&daddr={2},{3}".format(self.latitude,
+        maps = self.shortUrl("https://www.google.com/maps/place/{0},{1}".format(latitude, longitude))
+        staticMaps = self.shortUrl("https://maps.googleapis.com/maps/api/staticmap?markers={},{}&zoom=14&size=300x180".format(latitude, longitude))
+        navigation = self.shortUrl("https://maps.google.com/maps?saddr={0},{1}&daddr={2},{3}".format(self.latitude,
                                                                                       self.longitude,
                                                                                       latitude,
-                                                                                      longitude)
+                                                                                      longitude))
 
-        gamepress = "https://pokemongo.gamepress.gg/pokemon/{0}".format(pokemon_id)
+        gamepress = self.shortUrl("https://pokemongo.gamepress.gg/pokemon/{0}".format(pokemon_id))
 
         message.update({
             'gamepress': gamepress,
@@ -349,13 +355,13 @@ def notify_discord(message):
     seconds = tth.total_seconds()
     minutes, seconds = divmod(seconds, 60)
     tth_str = "%02d:%02d" % (minutes, seconds)
-    time_str = "Disappears in: {} (**{}**)".format(tth_str, disappear_datetime.strftime('%H:%M:%S'))
+    time_str = "Disappears in: {} (**{}**)".format(tth_str, disappear_datetime.strftime('%H:%M'))
 
-    body += "**{}** found{}!\n\n{}".format(message['name'], " in **" + message['sublocality'] + "**" if message['sublocality'] != "" else "", time_str)
+    body += "**{}**{} until **{}**!".format(message['name'], " in **" + message['sublocality'] + "**" if message['sublocality'] != "" else " found", disappear_datetime.strftime('%H:%M'))
     extra_str = ""
     if ivs and moves:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
-        extra_str = "\n\nIV: {}/{}/{} **{}%**\nMoves: {} - {}.\n\n".format(ivs[0],
+        extra_str = "\nIV: {}/{}/{} **{}**%\nMoves: **{} - {}**.".format(ivs[0],
                                                                    ivs[1],
                                                                    ivs[2],
                                                                    iv_percent,
@@ -365,7 +371,7 @@ def notify_discord(message):
         discord_log.warn("IVs: {} Moves: {} ExtraStr: {}".format(ivs, moves, extra_str))
         discord_log.warn(str(message))
     body += extra_str
-    body += "{}\n\n{}\n\n{}".format(message['gamepress'], message['maps'], message['staticMaps'])
+    body += "\nGP: {} Maps: {} Img: {}".format(message['gamepress'], message['maps'], message['staticMaps'])
 
     channel = config.DISCORD_CHANNEL_ID
     token = config.DISCORD_TOKEN
