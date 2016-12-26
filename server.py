@@ -29,10 +29,10 @@ class NotifierServer:
     def sublocality(self, latitude, longitude):
         base = "http://maps.googleapis.com/maps/api/geocode/json?"
         params = "latlng={lat},{lon}&sensor={sen}".format(
-						lat=latitude,
-						lon=longitude,
-						sen='true'
-				)
+            lat=latitude,
+            lon=longitude,
+            sen='true'
+        )
         url = "{base}{params}".format(base=base, params=params)
         response = requests.get(url)
 
@@ -47,12 +47,6 @@ class NotifierServer:
                         return address['long_name']
 
         return ""
-
-    def shortUrl(self, url):
-				post_url = 'https://www.googleapis.com/urlshortener/v1/url?key={}'.format(config.GOOGLE_SHORTENER_KEY)
-				payload = {'longUrl': url}
-				r = requests.post(post_url, data=json.dumps(payload), headers={'content-type': 'application/json'})
-				return r.json()['id']
 
     def process(self, message):
         """
@@ -103,19 +97,21 @@ class NotifierServer:
             return
         self.cache[encounter] = 1  # cache it
 
-        maps = self.shortUrl("https://www.google.com/maps/place/{0},{1}".format(latitude, longitude))
-        staticMaps = self.shortUrl("https://maps.googleapis.com/maps/api/staticmap?markers={},{}&zoom=14&size=300x180".format(latitude, longitude))
-        navigation = self.shortUrl("https://maps.google.com/maps?saddr={0},{1}&daddr={2},{3}".format(self.latitude,
-                                                                                      self.longitude,
-                                                                                      latitude,
-                                                                                      longitude))
+        maps = "https://www.google.com/maps/place/{0},{1}".format(latitude, longitude)
+        static_maps = "https://maps.googleapis.com/maps/api/staticmap?markers={},{}&zoom=14&size=300x180".format(
+            latitude,
+            longitude)
+        navigation = "https://maps.google.com/maps?saddr={0},{1}&daddr={2},{3}".format(self.latitude,
+                                                                                       self.longitude,
+                                                                                       latitude,
+                                                                                       longitude)
 
-        gamepress = self.shortUrl("https://pokemongo.gamepress.gg/pokemon/{0}".format(pokemon_id))
+        gamepress = "https://pokemongo.gamepress.gg/pokemon/{0}".format(pokemon_id)
 
         message.update({
             'gamepress': gamepress,
             'maps': maps,
-            'staticMaps': staticMaps,
+            'static_maps': static_maps,
             'sublocality': self.sublocality(latitude, longitude),
             'navigation': navigation,
             'ivs': ivs,
@@ -179,6 +175,16 @@ class ServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         self.send_response(200)
         self.end_headers()
+
+
+def shorten_url(url):
+    if config.SHORTEN_URLS and config.GOOGLE_SHORTENER_KEY:
+        post_url = 'https://www.googleapis.com/urlshortener/v1/url?key={}'.format(config.GOOGLE_SHORTENER_KEY)
+        payload = {'longUrl': url}
+        r = requests.post(post_url, data=json.dumps(payload), headers={'content-type': 'application/json'})
+        return r.json()['id']
+
+    return url
 
 
 def get_simple_formatting(message):
@@ -272,7 +278,8 @@ def notify_pushbullet(message):
             return
 
     title, body = get_simple_formatting(message['name'], message['distance'], message['ivs'], message['moves'],
-                                        message['gamepress'], message['maps'], message['navigation'], message['sublocality'])
+                                        message['gamepress'], message['maps'], message['navigation'],
+                                        message['sublocality'])
 
     url = 'https://api.pushbullet.com/v2/pushes'
     headers = {'Content-type': 'application/x-www-form-urlencoded'}
@@ -355,28 +362,41 @@ def notify_discord(message):
     seconds = tth.total_seconds()
     minutes, seconds = divmod(seconds, 60)
     tth_str = "%02d:%02d" % (minutes, seconds)
-    time_str = "Disappears in: {} (**{}**)".format(tth_str, disappear_datetime.strftime('%H:%M'))
-
-    body += "**{}**{} until **{}**!".format(message['name'], " in **" + message['sublocality'] + "**" if message['sublocality'] != "" else " found", disappear_datetime.strftime('%H:%M'))
-    extra_str = ""
+    iv_percent = None
     if ivs and moves:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
-        extra_str = "\nIV: {}/{}/{} **{}**%\nMoves: **{} - {}**.".format(ivs[0],
-                                                                   ivs[1],
-                                                                   ivs[2],
-                                                                   iv_percent,
-                                                                   moves[0],
-                                                                   moves[1])
+
+    include_ivs = iv_percent and not perfect_ivs and not anti_perfect_ivs
+
+    body += "**{}**".format(message['name'])
+    if include_ivs:
+        body += " (**{}%**)".format(iv_percent)
+
+    disappear_datetime_str = disappear_datetime.strftime('%H:%M')
+
+    if message.get('sublocality'):
+        body += " in **{}** until **{}**".format(message['sublocality'], disappear_datetime_str)
     else:
-        discord_log.warn("IVs: {} Moves: {} ExtraStr: {}".format(ivs, moves, extra_str))
+        body += " found until **{}**".format(disappear_datetime_str)
+
+    body += " ({} left)!".format(tth_str)
+
+    if ivs and moves:
+        body += "\nIV: {}/{}/{} with **{} - {}**.".format(ivs[0],
+                                                          ivs[1],
+                                                          ivs[2],
+                                                          moves[0],
+                                                          moves[1])
+    else:
+        discord_log.warn("IVs: {} Moves: {}".format(ivs, moves))
         discord_log.warn(str(message))
-    body += extra_str
-    body += "\nGP: {} Maps: {} Img: {}".format(message['gamepress'], message['maps'], message['staticMaps'])
+    body += "\nMaps: {}\nGP: {} Preview: {}".format(message['maps'], shorten_url(message['gamepress']),
+                                                    shorten_url(message['static_maps']))
 
     channel = config.DISCORD_CHANNEL_ID
     token = config.DISCORD_TOKEN
     url = 'https://discordapp.com/api/webhooks/{}/{}'.format(channel, token)
-    headers = {'Content-type': 'application/json'}
+    headers = {'Content-Type': 'application/json'}
 
     session = requests.Session()
     session.headers.update(headers)
@@ -388,7 +408,7 @@ def notify_discord(message):
     discord_log.info('Discord notified: ' + body)
     if send(session, url, body):
         discord_log.info(body)
-        body = body[13:body.find("found!")]
+        body = body[13:body.find(" in ")]
         print 'Discord notified: ' + body
 
 
@@ -437,7 +457,7 @@ discord_log = logging.getLogger('discord')
 
 
 def main():
-    logging.basicConfig(filename='log.txt', level=10) # debug logging
+    logging.basicConfig(filename='log.txt', level=10)  # debug logging
     global discord_log
     discord_log = logging.getLogger('discord')
 
