@@ -182,7 +182,10 @@ def shorten_url(url):
         post_url = 'https://www.googleapis.com/urlshortener/v1/url?key={}'.format(config.GOOGLE_SHORTENER_KEY)
         payload = {'longUrl': url}
         r = requests.post(post_url, data=json.dumps(payload), headers={'content-type': 'application/json'})
-        return r.json()['id']
+        if r.ok:
+            return r.json()['id']
+        else:
+            logging.error("Unable to shorten url")
 
     return url
 
@@ -256,7 +259,7 @@ def send(session, url, body):
 
 def notify_simple(message):
     title, body = get_simple_formatting(message)
-    print "{}\n{}".format(title, body)
+    print u"{}\n{}".format(title, body)
 
 
 def notify_pushbullet(message):
@@ -346,11 +349,11 @@ def notify_discord(message):
     anti_perfect_ivs = sum(ivs) == 0 if ivs else False
 
     if perfect_ivs:
-        body = "Perfect "
+        body = u"Perfect "
     elif anti_perfect_ivs:
-        body = "Shittiest possible "
+        body = u"Shittiest possible "
     else:
-        body = ""
+        body = u""
 
     disappear_time = message['disappear_time']
 
@@ -361,28 +364,28 @@ def notify_discord(message):
     tth = disappear_datetime - now
     seconds = tth.total_seconds()
     minutes, seconds = divmod(seconds, 60)
-    tth_str = "%02d:%02d" % (minutes, seconds)
+    tth_str = u"%02d:%02d" % (minutes, seconds)
     iv_percent = None
     if ivs and moves:
         iv_percent = int((float(ivs[0]) + float(ivs[1]) + float(ivs[2])) / 45 * 100)
 
     include_ivs = iv_percent and not perfect_ivs and not anti_perfect_ivs
 
-    body += "**{}**".format(message['name'])
+    body += u"**{}**".format(message['name'])
     if include_ivs:
-        body += " (**{}%**)".format(iv_percent)
+        body += u" (**{}%**)".format(iv_percent)
 
     disappear_datetime_str = disappear_datetime.strftime('%H:%M')
 
     if message.get('sublocality'):
-        body += " in **{}** until **{}**".format(message['sublocality'], disappear_datetime_str)
+        body += u" in **{}** until **{}**".format(message['sublocality'], disappear_datetime_str)
     else:
-        body += " found until **{}**".format(disappear_datetime_str)
+        body += u" found until **{}**".format(disappear_datetime_str)
 
-    body += " ({} left)!".format(tth_str)
+    body += u" ({} left)!".format(tth_str)
 
     if ivs and moves:
-        body += "\nIV: {}/{}/{} with **{} - {}**.".format(ivs[0],
+        body += u"\nIV: {}/{}/{} with **{} - {}**.".format(ivs[0],
                                                           ivs[1],
                                                           ivs[2],
                                                           moves[0],
@@ -390,7 +393,7 @@ def notify_discord(message):
     else:
         discord_log.warn("IVs: {} Moves: {}".format(ivs, moves))
         discord_log.warn(str(message))
-    body += "\nMaps: {}\nGP: {} Preview: {}".format(message['maps'], shorten_url(message['gamepress']),
+    body += u"\nMaps: {}\nGP: {} Preview: {}".format(message['maps'], shorten_url(message['gamepress']),
                                                     shorten_url(message['static_maps']))
 
     channel = config.DISCORD_CHANNEL_ID
@@ -421,6 +424,7 @@ def notifier(methods, q):
                     try:
                         method(message)
                     except Exception as e1:
+                        logging.exception("Exception in notifier")
                         print "Exception in notifier({}): {}".format(method.__name__, e1)
                 q.task_done()
         except Exception as e:
