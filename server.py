@@ -309,7 +309,7 @@ def accept(message, whitelist):
     if message.get('individual_attack'):
         ivs = [int(message['individual_attack']), int(message['individual_defense']),
                int(message['individual_stamina'])]
-        iv_percent = int((ivs[0] + ivs[1] + ivs[2]) / 45.0 * 100)
+        iv_percent = int(float(ivs[0] + ivs[1] + ivs[2]) * 100 / 45)
 
     cp = message.get('cp')
     pokemon_name = pogoidmapper.get_pokemon_name(str(message['pokemon_id']))
