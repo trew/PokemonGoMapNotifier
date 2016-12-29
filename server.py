@@ -26,28 +26,6 @@ class NotifierServer:
         self.notifier_queue = notifier_queue
         self.cache = LRUCache(maxsize=100)
 
-    def sublocality(self, latitude, longitude):
-        base = "http://maps.googleapis.com/maps/api/geocode/json?"
-        params = "latlng={lat},{lon}&sensor={sen}".format(
-            lat=latitude,
-            lon=longitude,
-            sen='true'
-        )
-        url = "{base}{params}".format(base=base, params=params)
-        response = requests.get(url)
-
-        for result in response.json()['results']:
-            if 'address_components' in result:
-                address_components = result['address_components']
-
-                for address in address_components:
-                    addressTypes = address['types']
-
-                    if 'sublocality' in addressTypes:
-                        return address['long_name']
-
-        return ""
-
     def process(self, message):
         """
         Processes an encountered pokemon and determines whether to send a notification or not
@@ -112,7 +90,7 @@ class NotifierServer:
             'gamepress': gamepress,
             'maps': maps,
             'static_maps': static_maps,
-            'sublocality': self.sublocality(latitude, longitude),
+            'sublocality': sublocality(latitude, longitude),
             'navigation': navigation,
             'ivs': ivs,
             'moves': moves
@@ -177,6 +155,32 @@ class ServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.end_headers()
 
 
+def sublocality(latitude, longitude):
+    if not config.FETCH_SUBLOCALITY:
+        return None
+
+    base = "http://maps.googleapis.com/maps/api/geocode/json?"
+    params = "latlng={lat},{lon}&sensor={sen}".format(
+        lat=latitude,
+        lon=longitude,
+        sen='true'
+    )
+    url = "{base}{params}".format(base=base, params=params)
+    response = requests.get(url)
+
+    for result in response.json()['results']:
+        if 'address_components' in result:
+            address_components = result['address_components']
+
+            for address in address_components:
+                address_types = address['types']
+
+                if 'sublocality' in address_types:
+                    return address['long_name']
+
+    return None
+
+
 def shorten_url(url):
     if config.SHORTEN_URLS and config.GOOGLE_SHORTENER_KEY:
         post_url = 'https://www.googleapis.com/urlshortener/v1/url?key={}'.format(config.GOOGLE_SHORTENER_KEY)
@@ -227,14 +231,13 @@ def get_simple_formatting(message):
 
     distance_str = "Distance is {}m.".format(distance) if distance else ""
 
-    maps = "Google Maps: {}{}".format(maps, " in " + sublocality if sublocality != "" else "") if maps else ""
-    navigation = "Navigation: {}".format(navigation) if navigation else ""
+    maps = "Google Maps: {}{}".format(maps, " in " + sublocality if sublocality else "") if maps else ""
 
     if ivs and sum(ivs) == 45:
         title = "Perfect "
     title = "{} found! Time left: {}".format(pokemon_name, tth_str)
     body = ""
-    for part in (distance_str, extra_str, maps, navigation):
+    for part in (distance_str, extra_str, maps):
         if part:
             if body:
                 body += "\n\n"
@@ -302,9 +305,11 @@ def notify_pushbullet(message):
 
 def accept(message, whitelist):
     ivs = None
+    iv_percent = None
     if message.get('individual_attack'):
         ivs = [int(message['individual_attack']), int(message['individual_defense']),
                int(message['individual_stamina'])]
+        iv_percent = int((ivs[0] + ivs[1] + ivs[2]) / 45.0 * 100)
 
     cp = message.get('cp')
     pokemon_name = pogoidmapper.get_pokemon_name(str(message['pokemon_id']))
@@ -329,6 +334,8 @@ def accept(message, whitelist):
         if 'max_cp' in element and (not cp or cp > element.get('max_cp', 9999)):
             continue
         if 'min_cp' in element and (not cp or cp < element.get('min_cp', 0)):
+            continue
+        if 'min_iv_percent' in element and (not iv_percent or iv_percent < element['min_iv_percent']):
             continue
         if 'quick_move' in element and quick_move != element.get('quick_move'):
             continue
