@@ -337,10 +337,19 @@ def accept(message, whitelist):
             continue
         if 'min_iv_percent' in element and (not iv_percent or iv_percent < element['min_iv_percent']):
             continue
-        if 'quick_move' in element and quick_move != element.get('quick_move'):
-            continue
-        if 'charge_move' in element and charge_move != element.get('charge_move'):
-            continue
+        if 'moves' in element:
+            if not quick_move or not charge_move:
+                continue
+            accepted_move = False
+            for move_set in element.get('moves'):
+                if move_set[0] == 'any' or move_set[0] == quick_move:
+                    accepted_move = True
+                    break
+                if move_set[1] == 'any' or move_set[1] == charge_move:
+                    accepted_move = True
+                    break
+            if not accepted_move:
+                continue
 
         return True
 
