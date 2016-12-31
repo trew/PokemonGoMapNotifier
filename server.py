@@ -343,11 +343,9 @@ def accept(message, whitelist):
             accepted_move = False
             for move_set in element.get('moves'):
                 if move_set[0] == 'any' or move_set[0] == quick_move:
-                    accepted_move = True
-                    break
-                if move_set[1] == 'any' or move_set[1] == charge_move:
-                    accepted_move = True
-                    break
+                    if move_set[1] == 'any' or move_set[1] == charge_move:
+                        accepted_move = True
+                        break
             if not accepted_move:
                 continue
 
