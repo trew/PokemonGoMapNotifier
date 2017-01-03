@@ -78,6 +78,25 @@ class Notifier(Thread):
         for encounter_id in remove:
             del self.processed_pokemons[encounter_id]
 
+
+    @staticmethod
+    def check_min(config_key, included_pokemon, message_key, pokemon):
+        value = included_pokemon.get(config_key)
+        return value is not None and pokemon.get(message_key, -1) < value
+
+    @staticmethod
+    def check_max(config_key, included_pokemon, message_key, pokemon):
+        value = included_pokemon.get(config_key)
+        return value is not None and pokemon.get(message_key, 99999) > value
+
+    @staticmethod
+    def check_min_max(key, included_pokemon, pokemon):
+        return Notifier.check_min('min_' + key, included_pokemon, key, pokemon) or Notifier.check_max('max_' + key,
+                                                                                                      included_pokemon,
+                                                                                                      key,
+                                                                                                      pokemon)
+
+
     @staticmethod
     def is_included_pokemon(pokemon, included_list):
         for included_pokemon in included_list:
@@ -87,24 +106,24 @@ class Notifier(Thread):
             if name is not None and name != pokemon['name']:
                 continue
 
-            # check minimum iv
-            min_iv = included_pokemon.get('min_iv')
-            if min_iv is not None and pokemon.get('iv', -1) < min_iv:
+            # check iv
+            if Notifier.check_min_max('iv', included_pokemon, pokemon):
                 continue
 
-            # check maximum iv
-            max_iv = included_pokemon.get('max_iv')
-            if max_iv is not None and pokemon.get('iv', 101) > max_iv:
+            # check cp
+            if Notifier.check_min_max('cp', included_pokemon, pokemon):
                 continue
 
-            # check minimum cp
-            min_cp = included_pokemon.get('min_cp')
-            if min_cp is not None and pokemon.get('cp', -1) < min_cp:
+            # check attack
+            if Notifier.check_min_max('attack', included_pokemon, pokemon):
                 continue
 
-            # check maximum cp
-            max_cp = included_pokemon.get('max_cp')
-            if max_cp is not None and pokemon.get('cp', 9999) > max_cp:
+            # check defense
+            if Notifier.check_min_max('defense', included_pokemon, pokemon):
+                continue
+
+            # check stamina
+            if Notifier.check_min_max('stamina', included_pokemon, pokemon):
                 continue
 
             # check moves
