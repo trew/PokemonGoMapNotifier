@@ -12,7 +12,7 @@ def get_pokemon_name(id):
         with open('data/names.json', 'r') as f:
             get_pokemon_name.names = json.load(f)
 
-    return get_pokemon_name.names.get(str(id), 'unknown').encode('utf-8')
+    return get_pokemon_name.names.get(str(id), 'unknown')
 
 
 def get_move_name(id):
@@ -20,7 +20,7 @@ def get_move_name(id):
         with open('data/moves.json', 'r') as f:
             get_move_name.names = json.load(f)
 
-    return get_move_name.names.get(str(id), 'unknown').encode('utf-8')
+    return get_move_name.names.get(str(id), 'unknown')
 
 
 def get_time_left(disappear_time):
