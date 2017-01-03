@@ -177,19 +177,20 @@ class Notifier(Thread):
                     'lon': message['longitude'],
                     'time': get_disappear_time(message['disappear_time']),
                     'time_left': get_time_left(message['disappear_time']),
-                    'google_maps': get_google_maps(lat, lon, shorten=self.shorten_urls, api_key=self.google_key),
-                    'static_google_maps': get_static_google_maps(lat, lon, shorten=self.shorten_urls,
-                                                                 api_key=self.google_key),
-                    'gamepress': get_gamepress(message['pokemon_id'], shorten=self.shorten_urls,
-                                               api_key=self.google_key)
+                    'google_maps': get_google_maps(lat, lon),
+                    'static_google_maps': get_static_google_maps(lat, lon),
+                    'gamepress': get_gamepress(message['pokemon_id'])
                 }
                 pokemon.update(data)
 
                 # add sublocality
-                if self.fetch_sublocality and self.google_key:
-                    sublocality = get_sublocality(pokemon['lat'], pokemon['lon'], self.google_key)
-                    if sublocality is not None:
-                        pokemon['sublocality'] = sublocality
+                if self.fetch_sublocality:
+                    if not self.google_key:
+                        log.warn("You must provide a google api key in order to fetch sublocality")
+                    else:
+                        sublocality = get_sublocality(pokemon['lat'], pokemon['lon'], self.google_key)
+                        if sublocality is not None:
+                            pokemon['sublocality'] = sublocality
 
                 # now notify all endpoints
                 endpoints = notification_setting.get('endpoints', ['simple'])
