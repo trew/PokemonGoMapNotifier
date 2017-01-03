@@ -52,7 +52,7 @@ class Notifier(Thread):
             # filter out disabled notifiers
             self.notification_settings = [notification_setting for notification_setting in
                                           parsed.get('notification_settings', []) if
-                                          notification_setting.get('config', {}).get('enabled', True)]
+                                          notification_setting.get('enabled', True)]
 
     def run(self):
         log.info("Notifier thread started.")
