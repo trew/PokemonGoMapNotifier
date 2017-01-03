@@ -61,7 +61,7 @@ if __name__ == '__main__':
     if args.debug:
         logging.getLogger('notifier').setLevel(logging.DEBUG)
 
-    notifier = Notifier()
+    notifier = Notifier(args.config)
     notifier.start()
 
     log.info("Webhook server started on http://{}:{}".format(args.host, args.port))

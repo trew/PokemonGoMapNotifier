@@ -12,7 +12,7 @@ class Notifier(Thread):
     Receives data from the webserver and deals with it.
     """
 
-    def __init__(self):
+    def __init__(self, config_file):
         super(Notifier, self).__init__()
 
         self.daemon = True
@@ -21,7 +21,7 @@ class Notifier(Thread):
 
         self.queue = Queue.Queue()
 
-        with open("config.json") as file:
+        with open(config_file) as file:
             log.info("Loading config.json")
             parsed = json.load(file)
 
