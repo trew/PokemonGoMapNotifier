@@ -53,7 +53,7 @@ def get_sublocality(latitude, longitude, api_key):
     if not api_key:
         return None
 
-    base = "http://maps.googleapis.com/maps/api/geocode/json?"
+    base = "https://maps.googleapis.com/maps/api/geocode/json?"
     params = "latlng={lat},{lon}&sensor={sen}&key={api_key}".format(
         lat=latitude,
         lon=longitude,
