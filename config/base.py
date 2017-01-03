@@ -1,8 +1,0 @@
-thresholds = {}
-whitelists = {}
-PUSHBULLET_API_KEY = None
-DISCORD_CHANNEL_ID = None
-DISCORD_TOKEN = None
-GOOGLE_SHORTENER_KEY=None
-SHORTEN_URLS=False
-FETCH_SUBLOCALITY=False
