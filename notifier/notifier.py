@@ -125,11 +125,11 @@ class Notifier(Thread):
         pokemon = {'name': get_pokemon_name(message['pokemon_id'])}
 
         # calculate IV if available and add corresponding values to the pokemon dict
-        attack = int(message.get('individual_attack', -1))
-        defense = int(message.get('individual_defense', -1))
-        stamina = int(message.get('individual_stamina', -1))
-        iv = float((attack + defense + stamina) * 100 / float(45))
-        if iv >= 0:
+        attack = int(message.get('individual_attack') if message.get('individual_attack') is not None else -1)
+        defense = int(message.get('individual_defense') if message.get('individual_defense') is not None else -1)
+        stamina = int(message.get('individual_stamina') if message.get('individual_stamina') is not None else -1)
+        if attack > -1 and defense > -1 and stamina > -1:
+            iv = float((attack + defense + stamina) * 100 / float(45))
             pokemon['attack'] = attack
             pokemon['defense'] = defense
             pokemon['stamina'] = stamina
