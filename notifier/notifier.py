@@ -18,6 +18,7 @@ class Notifier(Thread):
         self.daemon = True
         self.name = "Notifier"
         self.notification_handlers = {}
+        self.processed_pokemons = {}
 
         self.queue = Queue.Queue()
 
@@ -57,14 +58,25 @@ class Notifier(Thread):
         log.info("Notifier thread started.")
 
         while True:
-            data = self.queue.get(block=True)
+            for i in range(0, 5000):
+                data = self.queue.get(block=True)
 
-            message_type = data.get('type')
+                message_type = data.get('type')
 
-            if message_type == 'pokemon':
-                self.handle_pokemon(data['message'])
-            else:
-                log.debug("Unsupported message type: %s" % message_type)
+                if message_type == 'pokemon':
+                    self.handle_pokemon(data['message'])
+                else:
+                    log.debug("Unsupported message type: %s" % message_type)
+            self.clean()
+
+    def clean(self):
+        now = datetime.datetime.utcnow()
+        remove = []
+        for encounter_id in self.processed_pokemons:
+            if self.processed_pokemons[encounter_id] < now:
+                remove.append(encounter_id)
+        for encounter_id in remove:
+            del self.processed_pokemons[encounter_id]
 
     @staticmethod
     def is_included_pokemon(pokemon, included_list):
@@ -120,6 +132,12 @@ class Notifier(Thread):
 
     def handle_pokemon(self, message):
         log.debug("Handling pokemon message")
+
+        if message['encounter_id'] in self.processed_pokemons:
+            log.debug("Encounter ID %s already processed.", message['encounter_id'])
+            return
+
+        self.processed_pokemons[message['encounter_id']] = datetime.datetime.utcfromtimestamp(message['disappear_time'])
 
         # initialize the pokemon dict
         pokemon = {'name': get_pokemon_name(message['pokemon_id'])}
