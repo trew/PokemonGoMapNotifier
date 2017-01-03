@@ -111,11 +111,11 @@ class Notifier(Thread):
                     continue
 
             # Passed all checks. This pokemon matches!
-            log.debug(u"Found match for %s" % pokemon['name'])
+            log.debug(u"Found match for {}".format(pokemon['name']))
             return True
 
         # Passed through all included pokemons but couldn't find a match
-        log.debug(u"No match found for %s" % pokemon['name'])
+        log.debug(u"No match found for {}".format(pokemon['name']))
         return False
 
     def handle_pokemon(self, message):
@@ -170,7 +170,7 @@ class Notifier(Thread):
 
             if notify:
                 # find the handler and notify
-                log.debug(u"Notifying about %s" % pokemon['name'])
+                log.debug(u"Notifying about {}".format(pokemon['name']))
 
                 lat = message['latitude']
                 lon = message['longitude']
@@ -203,15 +203,16 @@ class Notifier(Thread):
                     notification_type = endpoint.get('type', 'simple')
                     notification_handler = self.notification_handlers[notification_type]
 
-                    log.info(u"Notifying to endpoint %s about %s" % (endpoint_ref, pokemon['name']))
+                    log.info(u"Notifying to endpoint {} about {}".format(endpoint_ref, pokemon['name']))
                     notification_handler.notify_pokemon(endpoint, pokemon)
             else:
                 # just debug log
                 if log.isEnabledFor(logging.DEBUG):
                     if 'name' in notification_setting:
-                        log.debug(u"Notification in %s for %s skipped" % (notification_setting['name'], pokemon['name']))
+                        log.debug(
+                            u"Notification in {} for {} skipped".format(notification_setting['name'], pokemon['name']))
                     else:
-                        log.debug(u"Notification for %s skipped" % pokemon['name'])
+                        log.debug(u"Notification for {} skipped".format(pokemon['name']))
 
     def enqueue(self, data):
         self.queue.put(data)
