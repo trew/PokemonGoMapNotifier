@@ -23,19 +23,19 @@ class Discord(NotificationHandler):
 
     @staticmethod
     def create_embedded(pokemon):
-        description = ""
+        description = u""
         if 'attack' in pokemon and 'defense' in pokemon and 'stamina' in pokemon:
-            description += "IV: **%s/%s/%s**\n" % (pokemon['attack'], pokemon['defense'], pokemon['stamina'])
+            description += u"IV: **%s/%s/%s**\n" % (pokemon['attack'], pokemon['defense'], pokemon['stamina'])
         if 'move_1' in pokemon and 'move_2' in pokemon:
-            description += "Moves: **%s - %s**\n" % (pokemon['move_1'], pokemon['move_2'])
-        description += "[About %s](%s)" % (pokemon['name'], pokemon['gamepress'])
+            description += u"Moves: **%s - %s**\n" % (pokemon['move_1'], pokemon['move_2'])
+        description += u"[About %s](%s)" % (pokemon['name'], pokemon['gamepress'])
 
-        thumbnail = 'https://pokemongo.gamepress.gg/sites/default/files/styles/240w/public/2016-07/{}.png'.format(
+        thumbnail = u'https://pokemongo.gamepress.gg/sites/default/files/styles/240w/public/2016-07/{}.png'.format(
             pokemon['id'])
         return {
             'content': Discord.create_title(pokemon),
             'embeds': [{
-                'title': "Open Google Maps",
+                'title': u"Open Google Maps",
                 'url': pokemon['google_maps'],
                 'description': description,
                 'thumbnail': {'url': thumbnail},
