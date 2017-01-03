@@ -136,12 +136,16 @@ class Notifier(Thread):
             pokemon['iv'] = iv
 
         # add cp if available
-        if 'cp' in message:
+        if 'cp' in message and message['cp'] is not None:
             pokemon['cp'] = int(message['cp'])
 
         # add moves to pokemon dict if found
-        move_1 = get_move_name(message['move_1']) if 'move_1' in message else None
-        move_2 = get_move_name(message['move_2']) if 'move_2' in message else None
+        move_1, move_2 = None, None
+        if message.get('move_1') is not None:
+            move_1 = get_move_name(message['move_1'])
+        if message.get('move_2') is not None:
+            move_2 = get_move_name(message['move_2'])
+
         if move_1 is not None:
             pokemon['move_1'] = move_1
         if move_2 is not None:
