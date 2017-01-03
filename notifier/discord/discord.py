@@ -30,7 +30,7 @@ class Discord(NotificationHandler):
             description += u"Moves: **%s - %s**\n" % (pokemon['move_1'], pokemon['move_2'])
         description += u"[About %s](%s)" % (pokemon['name'], pokemon['gamepress'])
 
-        thumbnail = u'https://github.com/kvangent/PokeAlarm/blob/master/icons/{}.png'.format(
+        thumbnail = u'https://raw.githubusercontent.com/kvangent/PokeAlarm/master/icons/{}.png'.format(
             pokemon['id'])
         return {
             'content': Discord.create_title(pokemon),
