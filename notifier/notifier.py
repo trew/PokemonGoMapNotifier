@@ -23,16 +23,16 @@ class Notifier(Thread):
         self.queue = Queue.Queue()
 
         with open(config_file) as file:
-            log.info("Loading config.json")
+            log.info("Loading %s" % config_file)
             parsed = json.load(file)
 
-            log.info("Parsing \"config\"")
+            log.debug("Parsing \"config\"")
             config = parsed.get('config', {})
             self.google_key = config.get('google_key')
             self.fetch_sublocality = config.get('fetch_sublocality', False)
             self.shorten_urls = config.get('shorten_urls', False)
 
-            log.info("Parsing \"endpoints\"")
+            log.debug("Parsing \"endpoints\"")
             self.endpoints = parsed.get('endpoints', {})
             for endpoint in self.endpoints:
                 endpoint_type = self.endpoints[endpoint].get('type', 'simple')
@@ -45,14 +45,17 @@ class Notifier(Thread):
                     from .discord import Discord
                     self.notification_handlers['discord'] = Discord()
 
-            log.info("Parsing \"includes\"")
+            log.debug("Parsing \"includes\"")
             self.includes = parsed.get('includes', {})
 
-            log.info("Parsing \"notification_settings\"")
+            log.debug("Parsing \"notification_settings\"")
             # filter out disabled notifiers
             self.notification_settings = [notification_setting for notification_setting in
                                           parsed.get('notification_settings', []) if
                                           notification_setting.get('enabled', True)]
+
+            for notification_setting in self.notification_settings:
+                log.info("Notifying to: %s" % notification_setting.get('name', "unknown_name"))
 
     def run(self):
         log.info("Notifier thread started.")
