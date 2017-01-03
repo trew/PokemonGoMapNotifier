@@ -2,4 +2,4 @@
 *.swp
 .idea
 log
-config.json
+config/*.json

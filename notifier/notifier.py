@@ -44,16 +44,14 @@ class Notifier(Thread):
                     from .discord import Discord
                     self.notification_handlers['discord'] = Discord()
 
+            log.info("Parsing \"includes\"")
+            self.includes = parsed.get('includes', {})
+
             log.info("Parsing \"notification_settings\"")
             # filter out disabled notifiers
             self.notification_settings = [notification_setting for notification_setting in
                                           parsed.get('notification_settings', []) if
                                           notification_setting.get('config', {}).get('enabled', True)]
-
-            log.info("Parsing \"global\"")
-            self.global_settings = parsed.get('global', {})
-            if 'include' not in self.global_settings:
-                self.global_settings['include'] = {}
 
     def run(self):
         log.info("Notifier thread started.")
@@ -61,7 +59,7 @@ class Notifier(Thread):
         while True:
             data = self.queue.get(block=True)
 
-            message_type = data.get('type', 'unsupported')
+            message_type = data.get('type')
 
             if message_type == 'pokemon':
                 self.handle_pokemon(data['message'])
@@ -79,22 +77,22 @@ class Notifier(Thread):
 
             # check minimum iv
             min_iv = included_pokemon.get('min_iv')
-            if min_iv is not None and pokemon.get('iv', -1) <= min_iv:
+            if min_iv is not None and pokemon.get('iv', -1) < min_iv:
                 continue
 
             # check maximum iv
             max_iv = included_pokemon.get('max_iv')
-            if max_iv is not None and pokemon.get('iv', 101) >= max_iv:
+            if max_iv is not None and pokemon.get('iv', 101) > max_iv:
                 continue
 
             # check minimum cp
             min_cp = included_pokemon.get('min_cp')
-            if min_cp is not None and pokemon.get('cp', -1) <= min_cp:
+            if min_cp is not None and pokemon.get('cp', -1) < min_cp:
                 continue
 
             # check maximum cp
             max_cp = included_pokemon.get('max_cp')
-            if max_cp is not None and pokemon.get('cp', 9999) >= max_cp:
+            if max_cp is not None and pokemon.get('cp', 9999) > max_cp:
                 continue
 
             # check moves
@@ -137,6 +135,10 @@ class Notifier(Thread):
             pokemon['stamina'] = stamina
             pokemon['iv'] = iv
 
+        # add cp if available
+        if 'cp' in message:
+            pokemon['cp'] = int(message['cp'])
+
         # add moves to pokemon dict if found
         move_1 = get_move_name(message['move_1']) if 'move_1' in message else None
         move_2 = get_move_name(message['move_2']) if 'move_2' in message else None
@@ -147,18 +149,20 @@ class Notifier(Thread):
 
         # loop through all notification settings and send notification if appropriate
         for notification_setting in self.notification_settings:
-            config = notification_setting.get('config', {})
-            inherit_global_include = config.get('inherit_global_include', False)
+            if 'name' in notification_setting:
+                log.debug("Checking through notification setting: %s" % notification_setting['name'])
 
             # check whether we should notify about this pokemon
             notify = False
-            if 'include' in notification_setting:
-                log.debug("Running match against local include list")
-                notify = self.is_included_pokemon(pokemon, notification_setting['include'])
+            if 'includes' in notification_setting:
+                include_refs = notification_setting['includes']
+                for include_ref in include_refs:
+                    include = self.includes.get(include_ref)
+                    if include is None:
+                        log.warn("Notification setting references unknown include: %s" % include_ref)
+                        continue
 
-            if not notify and inherit_global_include:
-                log.debug("Running match against global include list")
-                notify = self.is_included_pokemon(pokemon, self.global_settings['include'])
+                    notify = self.is_included_pokemon(pokemon, include)
 
             if notify:
                 # find the handler and notify
@@ -193,9 +197,16 @@ class Notifier(Thread):
                     endpoint = self.endpoints[endpoint_ref]
                     notification_type = endpoint.get('type', 'simple')
                     notification_handler = self.notification_handlers[notification_type]
+
+                    log.info("Notifying to endpoint %s about %s" % (endpoint_ref, pokemon['name']))
                     notification_handler.notify_pokemon(endpoint, pokemon)
             else:
-                log.debug("Notification to %s for %s skipped" % (str(notification_setting), pokemon['name']))
+                # just debug log
+                if log.isEnabledFor(logging.DEBUG):
+                    if 'name' in notification_setting:
+                        log.debug("Notification in %s for %s skipped" % (notification_setting['name'], pokemon['name']))
+                    else:
+                        log.debug("Notification for %s skipped" % pokemon['name'])
 
-    def update(self, data):
+    def enqueue(self, data):
         self.queue.put(data)

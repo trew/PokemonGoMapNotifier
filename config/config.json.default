@@ -1,0 +1,54 @@
+{
+  "config": {
+    "google_key": "<YOURKEY>",
+    "shorten_urls": false,
+    "fetch_sublocality": false
+  },
+  "endpoints": {
+    "my_discord": {
+        "type": "discord",
+        "url": "http://<YOUR DISCORD WEBHOOK URL>"
+    }
+  },
+  "includes": {
+    "perfect_iv": [
+      {
+        "min_iv": 100
+      }
+    ],
+    "some_other_list": [
+      {
+        "name": "Pidgey"
+      },
+      {
+        "name": "Rattata",
+        "min_iv": 82,
+        "moves": [
+          {
+            "move_1": "Bubble"
+          }
+        ]
+      },
+      {
+        "name": "Blastoise",
+        "moves": [
+          {
+            "move_2": "Hydro Pump"
+          }
+        ]
+      }
+    ]
+  },
+  "notification_settings": [
+    {
+      "name": "Test",
+      "endpoints": [
+        "discord_test"
+      ],
+      "includes": [
+        "perfect_iv",
+        "some_other_list"
+      ]
+    }
+  ]
+}

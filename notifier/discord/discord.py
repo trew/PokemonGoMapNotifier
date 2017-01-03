@@ -13,47 +13,66 @@ class Discord(NotificationHandler):
             log.error("No url available to notify to")
             return
 
-        body = self.create_body(pokemon)
+        data = self.create_embedded(pokemon)
 
-        headers = {'Content-Type': 'application/json'}
-
-        session = requests.Session()
-        session.headers.update(headers)
-        body = {
-            'content': body
-        }
-
-        body = json.dumps(body)
-        log.debug('Notifying Discord: %s' % body)
         for i in range(0, 5):
-            if self.send(session, url, body):
-                log.info('Discord notified: %s' % body)
+            log.debug('Notifying Discord: %s' % data)
+            if self.send(url, data):
+                log.info('Discord notified: %s' % data)
                 break
 
     @staticmethod
-    def create_body(pokemon):
-        perfect_ivs = pokemon.get('iv', -1) == 45
+    def create_embedded(pokemon):
+        description = ""
+        if 'attack' in pokemon and 'defense' in pokemon and 'stamina' in pokemon:
+            description += "IV: **%s/%s/%s**\n" % (pokemon['attack'], pokemon['defense'], pokemon['stamina'])
+        if 'move_1' in pokemon and 'move_2' in pokemon:
+            description += "Moves: **%s - %s**\n" % (pokemon['move_1'], pokemon['move_2'])
+        description += "[About %s](%s)" % (pokemon['name'], pokemon['gamepress'])
+
+        thumbnail = 'https://pokemongo.gamepress.gg/sites/default/files/styles/240w/public/2016-07/{}.png'.format(
+            pokemon['id'])
+        return {
+            'content': Discord.create_title(pokemon),
+            'embeds': [{
+                'title': "Open Google Maps",
+                'url': pokemon['google_maps'],
+                'description': description,
+                'thumbnail': {'url': thumbnail},
+                'image': {'url': pokemon['static_google_maps']}
+            }]
+        }
+
+    @staticmethod
+    def create_title(pokemon):
+        perfect_ivs = pokemon.get('iv') == 100
         anti_perfect_ivs = pokemon.get('iv') == 0
 
         if perfect_ivs:
-            body = u"Perfect "
+            title = u"Perfect "
         elif anti_perfect_ivs:
-            body = u"Shittiest possible "
+            title = u"Shittiest possible "
         else:
-            body = u""
+            title = u""
 
         include_ivs = 'iv' in pokemon and not perfect_ivs and not anti_perfect_ivs
 
-        body += u"**{}**".format(pokemon['name'])
+        title += u"**{}**".format(pokemon['name'])
         if include_ivs:
-            body += u" (**{}%**)".format(int(round(pokemon['iv'])))
+            title += u" (**{}%**)".format(int(round(pokemon['iv'])))
 
         if pokemon.get('sublocality'):
-            body += u" in **{}** until **{}**".format(pokemon['sublocality'], pokemon['time'])
+            title += u" in **{}** until **{}**".format(pokemon['sublocality'], pokemon['time'])
         else:
-            body += u" found until **{}**".format(pokemon['time'])
+            title += u" found until **{}**".format(pokemon['time'])
 
-        body += u" ({} left)!".format(pokemon['time_left'])
+        title += u" ({} left)!".format(pokemon['time_left'])
+        return title
+
+    @staticmethod
+    def create_simple(pokemon):
+
+        body = Discord.create_title(pokemon)
 
         if 'iv' in pokemon and 'move_1' in pokemon and 'move_2' in pokemon:
             body += u"\nIV: {}/{}/{} with **{} - {}**.".format(pokemon['attack'],
@@ -65,18 +84,28 @@ class Discord(NotificationHandler):
         body += u"\nMaps: {}\nGP: {} Preview: {}".format(pokemon['google_maps'], pokemon['gamepress'],
                                                          pokemon['static_google_maps'])
 
-        return body
+        return {
+            'content': body
+        }
 
     @staticmethod
-    def send(session, url, body):
+    def send(url, data):
         try:
-            response = session.post(url, data=body)
-        except Exception as e:
-            print "Exception {}".format(e)
-            return False
-        else:
-            if response.status_code != 200 and response.status_code != 204:
-                log.error("Error: {} {}".format(response.status_code, response.reason))
-                return False
+            headers = {'Content-Type': 'application/json'}
 
-            return True
+            session = requests.Session()
+            session.headers.update(headers)
+
+            response = session.post(url, json=data, timeout=(None, 1))
+        except requests.exceptions.ReadTimeout:
+            log.warn('Response timed out on discord webhook %s', url)
+            return False
+        except requests.exceptions.RequestException:
+            log.exception('Exception posting to discord webhook %s', url)
+            return False
+
+        if response.status_code != 200 and response.status_code != 204:
+            log.error("Error: {} {}".format(response.status_code, response.reason))
+            return False
+
+        return True

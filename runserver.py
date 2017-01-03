@@ -36,7 +36,7 @@ app = Flask(__name__)
 @app.route('/', methods=['POST'])
 def webhook_receiver():
     data = json.loads(request.data)
-    notifier.update(data)
+    notifier.enqueue(data)
     return ""
 
 
@@ -55,6 +55,7 @@ if __name__ == '__main__':
     parser.add_argument('--host', help='Host', default='localhost')
     parser.add_argument('-p', '--port', help='Port', type=int, default=8000)
     parser.add_argument('--debug', help="Debug mode", action='store_true', default=False)
+    parser.add_argument('-c', '--config', help="config.json file to use", default="config/config.json")
     args = parser.parse_args()
 
     if args.debug:
