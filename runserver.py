@@ -40,6 +40,14 @@ def webhook_receiver():
     return ""
 
 
+@app.route('/location/', methods=['GET'])
+def set_location():
+    lat = request.args['lat']
+    lon = request.args['lon']
+    notifier.set_location(lat, lon)
+    return ""
+
+
 if __name__ == '__main__':
     # Setup logging
     log = log_setup()

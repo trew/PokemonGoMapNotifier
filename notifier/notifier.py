@@ -2,7 +2,7 @@ from threading import Thread
 from .utils import *
 import logging
 import Queue
-import json
+import commentjson as json
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ class Notifier(Thread):
         self.name = "Notifier"
         self.notification_handlers = {}
         self.processed_pokemons = {}
+        self.latitude, self.longitude = None, None
 
         self.queue = Queue.Queue()
 
@@ -99,9 +100,7 @@ class Notifier(Thread):
                                                                                                       key,
                                                                                                       pokemon)
 
-
-    @staticmethod
-    def is_included_pokemon(pokemon, included_list):
+    def is_included_pokemon(self, pokemon, included_list):
         for included_pokemon in included_list:
 
             # check name. if name specification doesn't exist, it counts as valid
@@ -128,6 +127,14 @@ class Notifier(Thread):
             # check stamina
             if Notifier.check_min_max('stamina', included_pokemon, pokemon):
                 continue
+
+            # check distance
+            if self.longitude is not None and self.latitude is not None:
+                max_dist = included_pokemon.get('max_dist')
+                if max_dist is not None:
+                    distance = get_distance(self.latitude, self.longitude, pokemon['lat'], pokemon['lon'])
+                    if distance > max_dist:
+                        continue
 
             # check moves
             if 'moves' in included_pokemon:
@@ -162,7 +169,11 @@ class Notifier(Thread):
         self.processed_pokemons[message['encounter_id']] = datetime.datetime.utcfromtimestamp(message['disappear_time'])
 
         # initialize the pokemon dict
-        pokemon = {'name': get_pokemon_name(message['pokemon_id'])}
+        pokemon = {
+            'name': get_pokemon_name(message['pokemon_id']),
+            'lat': message['latitude'],
+            'lon': message['longitude']
+        }
 
         # calculate IV if available and add corresponding values to the pokemon dict
         attack = int(message.get('individual_attack') if message.get('individual_attack') is not None else -1)
@@ -217,8 +228,6 @@ class Notifier(Thread):
                 data = {
                     'id': message['pokemon_id'],
                     'encounter_id': message['encounter_id'],
-                    'lat': message['latitude'],
-                    'lon': message['longitude'],
                     'time': get_disappear_time(message['disappear_time']),
                     'time_left': get_time_left(message['disappear_time']),
                     'google_maps': get_google_maps(lat, lon),
@@ -256,3 +265,9 @@ class Notifier(Thread):
 
     def enqueue(self, data):
         self.queue.put(data)
+
+    def set_location(self, lat, lon):
+        self.latitude = float(lat)
+        self.longitude = float(lon)
+
+        log.info("Location set to %s,%s" % (lat, lon))
