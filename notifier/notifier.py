@@ -318,6 +318,8 @@ class Notifier(Thread):
                         continue
 
                     notify = self.is_included_pokemon(pokemon, include)
+                    if notify:
+                        break
 
             if notify:
                 # find the handler and notify
