@@ -58,6 +58,84 @@ class Notifier(Thread):
             for notification_setting in self.notification_settings:
                 log.info("Notifying to: %s" % notification_setting.get('name', "unknown_name"))
 
+            log.info("Parsing pokemon lists")
+            self.parse_includes()
+            # TODO check for circular pokemons_refs and raise errors if such exists
+
+    def parse_includes(self):
+        log.debug("Add global include config to local pokemons")
+
+        self.add_global_to_local()
+        self.resolve_refs()
+
+        log.debug("Cleaning up refs and unused variables")
+        for include in self.includes:
+            self.includes[include].pop('min_iv', None)
+            self.includes[include].pop('max_iv', None)
+            self.includes[include].pop('min_cp', None)
+            self.includes[include].pop('max_cp', None)
+            self.includes[include].pop('min_attack', None)
+            self.includes[include].pop('max_attack', None)
+            self.includes[include].pop('min_defense', None)
+            self.includes[include].pop('max_defense', None)
+            self.includes[include].pop('min_stamina', None)
+            self.includes[include].pop('max_stamina', None)
+            self.includes[include].pop('name', None)
+            self.includes[include].pop('max_dist', None)
+            self.includes[include].pop('moves', None)
+
+        for include in self.includes:
+            self.includes[include] = self.includes[include]['pokemons']
+
+        log.debug("Parsing complete")
+
+    def resolve_refs(self):
+        for include in self.includes:
+            include = self.includes[include]
+            if 'pokemons' not in include:
+                include['pokemons'] = []
+
+            for ref in include.get('pokemons_refs', []):
+                self.add_pokemons_from_ref(ref, include)
+
+            include.pop('pokemons_refs', None)
+            self.add_global_to_local()
+
+    def add_pokemons_from_ref(self, ref, include):
+        resolved_ref = self.includes.get(ref)
+
+        if 'pokemons' in resolved_ref:
+            for pokemon in resolved_ref['pokemons']:
+                include['pokemons'].append(pokemon.copy())
+
+        if 'pokemons_refs' in resolved_ref:
+            for r in resolved_ref['pokemons_refs']:
+                self.add_pokemons_from_ref(r, include)
+
+    def add_global_to_local(self):
+        for include in self.includes:
+            include = self.includes[include]
+
+            for pokemon in include.get('pokemons', []):
+                self.add_from_source_if_not_exists('min_iv', include, pokemon)
+                self.add_from_source_if_not_exists('max_iv', include, pokemon)
+                self.add_from_source_if_not_exists('min_cp', include, pokemon)
+                self.add_from_source_if_not_exists('max_cp', include, pokemon)
+                self.add_from_source_if_not_exists('min_attack', include, pokemon)
+                self.add_from_source_if_not_exists('max_attack', include, pokemon)
+                self.add_from_source_if_not_exists('min_defense', include, pokemon)
+                self.add_from_source_if_not_exists('max_defense', include, pokemon)
+                self.add_from_source_if_not_exists('min_stamina', include, pokemon)
+                self.add_from_source_if_not_exists('max_stamina', include, pokemon)
+                self.add_from_source_if_not_exists('name', include, pokemon)
+                self.add_from_source_if_not_exists('max_dist', include, pokemon)
+                self.add_from_source_if_not_exists('moves', include, pokemon)
+
+    @staticmethod
+    def add_from_source_if_not_exists(key, source, target):
+        if key in source and key not in target:
+            target[key] = source[key]
+
     def run(self):
         log.info("Notifier thread started.")
 
@@ -82,16 +160,15 @@ class Notifier(Thread):
         for encounter_id in remove:
             del self.processed_pokemons[encounter_id]
 
-
     @staticmethod
     def check_min(config_key, included_pokemon, message_key, pokemon):
         value = included_pokemon.get(config_key)
-        return value is not None and pokemon.get(message_key, -1) < value
+        return value is not None and pokemon.get(message_key, -1) <= value
 
     @staticmethod
     def check_max(config_key, included_pokemon, message_key, pokemon):
         value = included_pokemon.get(config_key)
-        return value is not None and pokemon.get(message_key, 99999) > value
+        return value is not None and pokemon.get(message_key, 99999) >= value
 
     @staticmethod
     def check_min_max(key, included_pokemon, pokemon):
@@ -100,60 +177,65 @@ class Notifier(Thread):
                                                                                                       key,
                                                                                                       pokemon)
 
+    def matches(self, pokemon, included_pokemon):
+        # check name. if name specification doesn't exist, it counts as valid
+        name = included_pokemon.get('name')
+        if name is not None and name != pokemon['name']:
+            return False
+
+        # check iv
+        if Notifier.check_min_max('iv', included_pokemon, pokemon):
+            return False
+
+        # check cp
+        if Notifier.check_min_max('cp', included_pokemon, pokemon):
+            return False
+
+        # check attack
+        if Notifier.check_min_max('attack', included_pokemon, pokemon):
+            return False
+
+        # check defense
+        if Notifier.check_min_max('defense', included_pokemon, pokemon):
+            return False
+
+        # check stamina
+        if Notifier.check_min_max('stamina', included_pokemon, pokemon):
+            return False
+
+        # check distance
+        max_dist = included_pokemon.get('max_dist')
+        if max_dist is not None:
+            if self.longitude is None or self.latitude is None:
+                return False
+
+            distance = get_distance(self.latitude, self.longitude, pokemon['lat'], pokemon['lon'])
+            if distance > max_dist:
+                return False
+
+        # check moves
+        if 'moves' in included_pokemon:
+            moves = included_pokemon['moves']
+            moves_match = False
+            for move_set in moves:
+                move_1 = move_set.get('move_1')
+                move_2 = move_set.get('move_2')
+                move_1_match = move_1 is None or move_1 == pokemon.get('move_1')
+                move_2_match = move_2 is None or move_2 == pokemon.get('move_2')
+                if move_1_match and move_2_match:
+                    moves_match = True
+                    break
+            if not moves_match:
+                return False
+
+        # Passed all checks. This pokemon matches!
+        return True
+
     def is_included_pokemon(self, pokemon, included_list):
         for included_pokemon in included_list:
-
-            # check name. if name specification doesn't exist, it counts as valid
-            name = included_pokemon.get('name')
-            if name is not None and name != pokemon['name']:
-                continue
-
-            # check iv
-            if Notifier.check_min_max('iv', included_pokemon, pokemon):
-                continue
-
-            # check cp
-            if Notifier.check_min_max('cp', included_pokemon, pokemon):
-                continue
-
-            # check attack
-            if Notifier.check_min_max('attack', included_pokemon, pokemon):
-                continue
-
-            # check defense
-            if Notifier.check_min_max('defense', included_pokemon, pokemon):
-                continue
-
-            # check stamina
-            if Notifier.check_min_max('stamina', included_pokemon, pokemon):
-                continue
-
-            # check distance
-            if self.longitude is not None and self.latitude is not None:
-                max_dist = included_pokemon.get('max_dist')
-                if max_dist is not None:
-                    distance = get_distance(self.latitude, self.longitude, pokemon['lat'], pokemon['lon'])
-                    if distance > max_dist:
-                        continue
-
-            # check moves
-            if 'moves' in included_pokemon:
-                moves = included_pokemon['moves']
-                moves_match = False
-                for move_set in moves:
-                    move_1 = move_set.get('move_1')
-                    move_2 = move_set.get('move_2')
-                    move_1_match = move_1 is None or move_1 == pokemon.get('move_1')
-                    move_2_match = move_2 is None or move_2 == pokemon.get('move_2')
-                    if move_1_match and move_2_match:
-                        moves_match = True
-                        break
-                if not moves_match:
-                    continue
-
-            # Passed all checks. This pokemon matches!
-            log.debug(u"Found match for {}".format(pokemon['name']))
-            return True
+            if self.matches(pokemon, included_pokemon):
+                log.debug(u"Found match for {}".format(pokemon['name']))
+                return True
 
         # Passed through all included pokemons but couldn't find a match
         log.debug(u"No match found for {}".format(pokemon['name']))
