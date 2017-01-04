@@ -162,20 +162,38 @@ class Notifier(Thread):
 
     @staticmethod
     def check_min(config_key, included_pokemon, message_key, pokemon):
-        value = included_pokemon.get(config_key)
-        return value is not None and pokemon.get(message_key, -1) <= value
+        required_value = included_pokemon.get(config_key)
+        if required_value is None:
+            return True
+
+        pokemon_value = pokemon.get(message_key, -1)
+        if pokemon_value < required_value:
+            return False
+        return True
 
     @staticmethod
     def check_max(config_key, included_pokemon, message_key, pokemon):
-        value = included_pokemon.get(config_key)
-        return value is not None and pokemon.get(message_key, 99999) >= value
+        required_value = included_pokemon.get(config_key)
+        if required_value is None:
+            return True
+        pokemon_value = pokemon.get(message_key, 99999)
+        if pokemon_value > required_value:
+            return False
+        return True
 
     @staticmethod
     def check_min_max(key, included_pokemon, pokemon):
-        return Notifier.check_min('min_' + key, included_pokemon, key, pokemon) or Notifier.check_max('max_' + key,
-                                                                                                      included_pokemon,
-                                                                                                      key,
-                                                                                                      pokemon)
+        """
+        Returns True if included_pokemon matches the given pokemon
+        :param key:
+        :param included_pokemon:
+        :param pokemon:
+        :return:
+        """
+        return Notifier.check_min('min_' + key, included_pokemon, key, pokemon) and Notifier.check_max('max_' + key,
+                                                                                                       included_pokemon,
+                                                                                                       key,
+                                                                                                       pokemon)
 
     def matches(self, pokemon, included_pokemon):
         # check name. if name specification doesn't exist, it counts as valid
@@ -184,23 +202,23 @@ class Notifier(Thread):
             return False
 
         # check iv
-        if Notifier.check_min_max('iv', included_pokemon, pokemon):
+        if not Notifier.check_min_max('iv', included_pokemon, pokemon):
             return False
 
         # check cp
-        if Notifier.check_min_max('cp', included_pokemon, pokemon):
+        if not Notifier.check_min_max('cp', included_pokemon, pokemon):
             return False
 
         # check attack
-        if Notifier.check_min_max('attack', included_pokemon, pokemon):
+        if not Notifier.check_min_max('attack', included_pokemon, pokemon):
             return False
 
         # check defense
-        if Notifier.check_min_max('defense', included_pokemon, pokemon):
+        if not Notifier.check_min_max('defense', included_pokemon, pokemon):
             return False
 
         # check stamina
-        if Notifier.check_min_max('stamina', included_pokemon, pokemon):
+        if not Notifier.check_min_max('stamina', included_pokemon, pokemon):
             return False
 
         # check distance
