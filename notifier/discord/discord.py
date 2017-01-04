@@ -96,7 +96,7 @@ class Discord(NotificationHandler):
             session = requests.Session()
             session.headers.update(headers)
 
-            response = session.post(url, json=data, timeout=(None, 1))
+            response = session.post(url, json=data, timeout=10)
         except requests.exceptions.ReadTimeout:
             log.warn('Response timed out on discord webhook %s', url)
             return False
