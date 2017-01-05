@@ -23,73 +23,78 @@ class Notifier(Thread):
 
         self.queue = Queue.Queue()
 
-        with open(config_file) as file:
-            log.info("Loading %s" % config_file)
-            parsed = json.load(file)
+        with open(config_file) as f:
+            log.info('Loading %s', config_file)
+            parsed = json.load(f)
 
-            log.debug("Parsing \"config\"")
+            log.debug('Parsing "config"')
             config = parsed.get('config', {})
             self.google_key = config.get('google_key')
             self.fetch_sublocality = config.get('fetch_sublocality', False)
             self.shorten_urls = config.get('shorten_urls', False)
 
-            log.debug("Parsing \"endpoints\"")
             self.endpoints = parsed.get('endpoints', {})
 
-            log.info("Adding Simple to available notification handlers")
             from .simple import Simple
             self.notification_handlers['simple'] = Simple()
 
             for endpoint in self.endpoints:
                 endpoint_type = self.endpoints[endpoint].get('type')
                 if endpoint_type == 'discord' and 'discord' not in self.notification_handlers:
-                    log.info("Adding Discord to available notification handlers")
+                    log.info('Adding Discord to available notification handlers')
                     from .discord import Discord
                     self.notification_handlers['discord'] = Discord()
 
-            log.debug("Parsing \"includes\"")
             self.includes = parsed.get('includes', {})
 
-            log.debug("Parsing \"notification_settings\"")
             # filter out disabled notifiers
-            self.notification_settings = [notification_setting for notification_setting in
-                                          parsed.get('notification_settings', []) if
-                                          notification_setting.get('enabled', True)]
+            parsed_notification_settings = parsed.get('notification_settings', {})
+            self.notification_settings = {k: v for k, v in parsed_notification_settings.items() if v.get('enabled', True)}
 
-            for notification_setting in self.notification_settings:
-                log.info("Notifying to: %s" % notification_setting.get('name', "unknown_name"))
-
-            log.info("Parsing pokemon lists")
             self.parse_includes()
 
-    def parse_includes(self):
-        log.debug("Add global include config to local pokemons")
+            self.includes_to_notifications = {}
+            active_includes = set()
 
-        self.add_global_to_local()
+            # loop through all notification settings
+            for notification_setting in self.notification_settings:
+
+                # get all include references for this notification setting
+                for include in self.notification_settings[notification_setting].get('includes', []):
+                    if include not in self.includes_to_notifications:
+                        self.includes_to_notifications[include] = []
+
+                    # mark this include as active and create the link between includes and notifications
+                    active_includes.add(include)
+                    self.includes_to_notifications[include].append(notification_setting)
+
+            # remove includes that's not used by any notifications
+            self.includes = {k: v for k, v in self.includes.items() if k in active_includes}
+
+            if not self.includes:
+                raise RuntimeError('No includes configured')
+
+            # remove includes refs, because they are not needed. simplifies debugging
+            for notification_setting in self.notification_settings:
+                # these references are covered by another dict, namely self.includes_to_notifications
+                self.notification_settings[notification_setting].pop('includes', None)
+
+                # if it's still here, it's enabled
+                self.notification_settings[notification_setting].pop('enabled', None)
+
+            # log some debug info
+            for include,notification_setting_refs in self.includes_to_notifications.iteritems():
+                log.debug('Notifying %s to %s', include, notification_setting_refs)
+
+            log.info('Initialized')
+
+    def parse_includes(self):
+        self.resolve_configurations()
         self.resolve_refs()
 
-        log.debug("Cleaning up refs and unused variables")
-        for include in self.includes:
-            self.includes[include].pop('min_iv', None)
-            self.includes[include].pop('max_iv', None)
-            self.includes[include].pop('min_cp', None)
-            self.includes[include].pop('max_cp', None)
-            self.includes[include].pop('min_hp', None)
-            self.includes[include].pop('max_hp', None)
-            self.includes[include].pop('min_attack', None)
-            self.includes[include].pop('max_attack', None)
-            self.includes[include].pop('min_defense', None)
-            self.includes[include].pop('max_defense', None)
-            self.includes[include].pop('min_stamina', None)
-            self.includes[include].pop('max_stamina', None)
-            self.includes[include].pop('name', None)
-            self.includes[include].pop('max_dist', None)
-            self.includes[include].pop('moves', None)
-
+        # bring the 'pokemons' entry to root level
         for include in self.includes:
             self.includes[include] = self.includes[include]['pokemons']
-
-        log.debug("Parsing complete")
 
     def resolve_refs(self):
         for include in self.includes:
@@ -101,7 +106,7 @@ class Notifier(Thread):
                 self.add_pokemons_from_ref(ref, include)
 
             include.pop('pokemons_refs', None)
-            self.add_global_to_local()
+            self.resolve_configurations()
 
     def add_pokemons_from_ref(self, ref, include):
         resolved_ref = self.includes.get(ref)
@@ -114,34 +119,34 @@ class Notifier(Thread):
             for r in resolved_ref['pokemons_refs']:
                 self.add_pokemons_from_ref(r, include)
 
-    def add_global_to_local(self):
+    def resolve_configurations(self):
         for include in self.includes:
             include = self.includes[include]
 
             for pokemon in include.get('pokemons', []):
-                self.add_from_source_if_not_exists('min_iv', include, pokemon)
-                self.add_from_source_if_not_exists('max_iv', include, pokemon)
-                self.add_from_source_if_not_exists('min_cp', include, pokemon)
-                self.add_from_source_if_not_exists('max_cp', include, pokemon)
-                self.add_from_source_if_not_exists('min_hp', include, pokemon)
-                self.add_from_source_if_not_exists('max_hp', include, pokemon)
-                self.add_from_source_if_not_exists('min_attack', include, pokemon)
-                self.add_from_source_if_not_exists('max_attack', include, pokemon)
-                self.add_from_source_if_not_exists('min_defense', include, pokemon)
-                self.add_from_source_if_not_exists('max_defense', include, pokemon)
-                self.add_from_source_if_not_exists('min_stamina', include, pokemon)
-                self.add_from_source_if_not_exists('max_stamina', include, pokemon)
-                self.add_from_source_if_not_exists('name', include, pokemon)
-                self.add_from_source_if_not_exists('max_dist', include, pokemon)
-                self.add_from_source_if_not_exists('moves', include, pokemon)
+                self.add_if_missing('min_iv', include, pokemon)
+                self.add_if_missing('max_iv', include, pokemon)
+                self.add_if_missing('min_cp', include, pokemon)
+                self.add_if_missing('max_cp', include, pokemon)
+                self.add_if_missing('min_hp', include, pokemon)
+                self.add_if_missing('max_hp', include, pokemon)
+                self.add_if_missing('min_attack', include, pokemon)
+                self.add_if_missing('max_attack', include, pokemon)
+                self.add_if_missing('min_defense', include, pokemon)
+                self.add_if_missing('max_defense', include, pokemon)
+                self.add_if_missing('min_stamina', include, pokemon)
+                self.add_if_missing('max_stamina', include, pokemon)
+                self.add_if_missing('name', include, pokemon)
+                self.add_if_missing('max_dist', include, pokemon)
+                self.add_if_missing('moves', include, pokemon)
 
     @staticmethod
-    def add_from_source_if_not_exists(key, source, target):
+    def add_if_missing(key, source, target):
         if key in source and key not in target:
             target[key] = source[key]
 
     def run(self):
-        log.info("Notifier thread started.")
+        log.info('Notifier thread started.')
 
         while True:
             for i in range(0, 5000):
@@ -152,7 +157,7 @@ class Notifier(Thread):
                 if message_type == 'pokemon':
                     self.handle_pokemon(data['message'])
                 else:
-                    log.debug("Unsupported message type: %s" % message_type)
+                    log.debug('Unsupported message type: %s', message_type)
             self.clean()
 
     def clean(self):
@@ -165,7 +170,7 @@ class Notifier(Thread):
             del self.processed_pokemons[encounter_id]
 
     @staticmethod
-    def check_min(config_key, included_pokemon, message_key, pokemon):
+    def check_min(config_key, included_pokemon, message_key, pokemon, match_data):
         required_value = included_pokemon.get(config_key)
         if required_value is None:
             return True
@@ -173,114 +178,129 @@ class Notifier(Thread):
         pokemon_value = pokemon.get(message_key, -1)
         if pokemon_value < required_value:
             return False
+
+        match_data.append(config_key)
         return True
 
     @staticmethod
-    def check_max(config_key, included_pokemon, message_key, pokemon):
+    def check_max(config_key, included_pokemon, message_key, pokemon, match_data):
         required_value = included_pokemon.get(config_key)
         if required_value is None:
             return True
+
         pokemon_value = pokemon.get(message_key, 99999)
         if pokemon_value > required_value:
             return False
+
+        match_data.append(config_key)
         return True
 
     @staticmethod
-    def check_min_max(key, included_pokemon, pokemon):
+    def check_min_max(key, included_pokemon, pokemon, match_data):
         """
         Returns True if included_pokemon matches the given pokemon
-        :param key:
-        :param included_pokemon:
-        :param pokemon:
-        :return:
         """
-        return Notifier.check_min('min_' + key, included_pokemon, key, pokemon) and Notifier.check_max('max_' + key,
-                                                                                                       included_pokemon,
-                                                                                                       key,
-                                                                                                       pokemon)
+        check_min = Notifier.check_min('min_' + key, included_pokemon, key, pokemon, match_data)
+        check_max = Notifier.check_max('max_' + key, included_pokemon, key, pokemon, match_data)
+        return check_min and check_max
 
-    def matches(self, pokemon, included_pokemon):
+    def matches(self, pokemon, pokemon_rules):
+        match_data = []
+
         # check name. if name specification doesn't exist, it counts as valid
-        name = included_pokemon.get('name')
-        if name is not None and name != pokemon['name']:
-            return False
+        name = pokemon_rules.get('name')
+        if name is not None:
+            if name != pokemon['name']:
+                return False, None
+            else:
+                match_data.append('name')
 
         # check iv
-        if not Notifier.check_min_max('iv', included_pokemon, pokemon):
-            return False
+        if not Notifier.check_min_max('iv', pokemon_rules, pokemon, match_data):
+            return False, None
 
         # check attack
-        if not Notifier.check_min_max('attack', included_pokemon, pokemon):
-            return False
+        if not Notifier.check_min_max('attack', pokemon_rules, pokemon, match_data):
+            return False, None
 
         # check defense
-        if not Notifier.check_min_max('defense', included_pokemon, pokemon):
-            return False
+        if not Notifier.check_min_max('defense', pokemon_rules, pokemon, match_data):
+            return False, None
 
         # check stamina
-        if not Notifier.check_min_max('stamina', included_pokemon, pokemon):
-            return False
+        if not Notifier.check_min_max('stamina', pokemon_rules, pokemon, match_data):
+            return False, None
 
         # check cp at level
-        min_cp = included_pokemon.get('min_cp')
+        min_cp = pokemon_rules.get('min_cp')
         if min_cp is not None:
             if 'attack' not in pokemon or 'defense' not in pokemon or 'stamina' not in pokemon:
-                return False
+                return False, None
 
             for level in min_cp:
                 required_cp = min_cp[level]
                 cp = get_cp_for_level(pokemon['id'], int(level), pokemon['attack'], pokemon['defense'],
                                       pokemon['stamina'])
                 if cp < required_cp:
-                    return False
+                    return False, None
 
-        max_cp = included_pokemon.get('max_cp')
+            match_data.append('min_cp')
+
+        max_cp = pokemon_rules.get('max_cp')
         if max_cp is not None:
             if 'attack' not in pokemon or 'defense' not in pokemon or 'stamina' not in pokemon:
-                return False
+                return False, None
 
             for level in max_cp:
                 required_cp = max_cp[level]
                 cp = get_cp_for_level(pokemon['id'], level, pokemon['attack'], pokemon['defense'], pokemon['stamina'])
                 if cp < required_cp:
-                    return False
+                    return False, None
+
+            match_data.append('max_cp')
 
         # check hp at level
-        min_hp = included_pokemon.get('min_hp')
+        min_hp = pokemon_rules.get('min_hp')
         if min_hp is not None:
             if 'stamina' not in pokemon:
-                return False
+                return False, None
 
             for level in min_hp:
                 required_hp = min_hp[level]
                 hp = get_hp_for_level(pokemon['id'], int(level), pokemon['stamina'])
                 if hp < required_hp:
-                    return False
+                    return False, None
 
-        max_hp = included_pokemon.get('max_hp')
+            match_data.append('min_hp')
+
+        max_hp = pokemon_rules.get('max_hp')
         if max_hp is not None:
             if 'stamina' not in pokemon:
-                return False
+                return False, None
 
             for level in max_hp:
                 required_hp = max_hp[level]
                 hp = get_hp_for_level(pokemon['id'], level, pokemon['stamina'])
                 if hp < required_hp:
-                    return False
+                    return False, None
+
+            match_data.append('max_hp')
 
         # check distance
-        max_dist = included_pokemon.get('max_dist')
+        max_dist = pokemon_rules.get('max_dist')
         if max_dist is not None:
             if self.longitude is None or self.latitude is None:
-                return False
+                return False, None
 
             distance = get_distance(self.latitude, self.longitude, pokemon['lat'], pokemon['lon'])
             if distance > max_dist:
-                return False
+                return False, None
+
+            match_data.append('max_dist')
 
         # check moves
-        if 'moves' in included_pokemon:
-            moves = included_pokemon['moves']
+        if 'moves' in pokemon_rules:
+            moves = pokemon_rules['moves']
             moves_match = False
             for move_set in moves:
                 move_1 = move_set.get('move_1')
@@ -291,26 +311,25 @@ class Notifier(Thread):
                     moves_match = True
                     break
             if not moves_match:
-                return False
+                return False, None
+
+            match_data.append('moves')
 
         # Passed all checks. This pokemon matches!
-        return True
+        return True, match_data
 
     def is_included_pokemon(self, pokemon, included_list):
         for included_pokemon in included_list:
-            if self.matches(pokemon, included_pokemon):
-                log.debug(u"Found match for {}".format(pokemon['name']))
+            match = self.matches(pokemon, included_pokemon)
+            if match[0]:
+                log.info(u"Found match for {} with rules: {}".format(pokemon['name'], match[1]))
                 return True
 
-        # Passed through all included pokemons but couldn't find a match
-        log.debug(u"No match found for {}".format(pokemon['name']))
         return False
 
     def handle_pokemon(self, message):
-        log.debug("Handling pokemon message")
-
         if message['encounter_id'] in self.processed_pokemons:
-            log.debug("Encounter ID %s already processed.", message['encounter_id'])
+            log.debug('Encounter ID %s already processed.', message['encounter_id'])
             return
 
         self.processed_pokemons[message['encounter_id']] = datetime.datetime.utcfromtimestamp(message['disappear_time'])
@@ -346,67 +365,51 @@ class Notifier(Thread):
         if move_2 is not None:
             pokemon['move_2'] = move_2
 
-        # loop through all notification settings and send notification if appropriate
-        for notification_setting in self.notification_settings:
-            if 'name' in notification_setting:
-                log.debug("Checking through notification setting: %s" % notification_setting['name'])
+        # Loop through all active includes and send notifications if appropriate
+        for include_ref in self.includes:
+            include = self.includes.get(include_ref)
+            match = self.is_included_pokemon(pokemon, include)
 
-            # check whether we should notify about this pokemon
-            notify = False
-            if 'includes' in notification_setting:
-                include_refs = notification_setting['includes']
-                for include_ref in include_refs:
-                    include = self.includes.get(include_ref)
-                    if include is None:
-                        log.warn("Notification setting references unknown include: %s" % include_ref)
-                        continue
-
-                    notify = self.is_included_pokemon(pokemon, include)
-                    if notify:
-                        break
-
-            if notify:
-                # find the handler and notify
-                log.debug(u"Notifying about {}".format(pokemon['name']))
-
-                lat = message['latitude']
-                lon = message['longitude']
-                data = {
-                    'encounter_id': message['encounter_id'],
-                    'time': get_disappear_time(message['disappear_time']),
-                    'time_left': get_time_left(message['disappear_time']),
-                    'google_maps': get_google_maps(lat, lon),
-                    'static_google_maps': get_static_google_maps(lat, lon),
-                    'gamepress': get_gamepress(message['pokemon_id'])
-                }
-                pokemon.update(data)
-
-                # add sublocality
-                if self.fetch_sublocality:
-                    if not self.google_key:
-                        log.warn("You must provide a google api key in order to fetch sublocality")
-                    else:
-                        sublocality = get_sublocality(pokemon['lat'], pokemon['lon'], self.google_key)
-                        if sublocality is not None:
-                            pokemon['sublocality'] = sublocality
-
-                # now notify all endpoints
-                endpoints = notification_setting.get('endpoints', ['simple'])
-                for endpoint_ref in endpoints:
-                    endpoint = self.endpoints.get(endpoint_ref, {})
-                    notification_type = endpoint.get('type', 'simple')
-                    notification_handler = self.notification_handlers[notification_type]
-
-                    log.info(u"Notifying to endpoint {} about {}".format(endpoint_ref, pokemon['name']))
-                    notification_handler.notify_pokemon(endpoint, pokemon)
+            if match:
+                notification_setting_refs = self.includes_to_notifications.get(include_ref)
+                log.info('Notifying to %s', notification_setting_refs)
+                for notification_setting_ref in notification_setting_refs:
+                    notification_setting = self.notification_settings.get(notification_setting_ref)
+                    self.notify(pokemon, message, notification_setting)
             else:
-                # just debug log
-                if log.isEnabledFor(logging.DEBUG):
-                    if 'name' in notification_setting:
-                        log.debug(
-                            u"Notification in {} for {} skipped".format(notification_setting['name'], pokemon['name']))
-                    else:
-                        log.debug(u"Notification for {} skipped".format(pokemon['name']))
+                log.debug('No match for %s in %s', pokemon['name'], include_ref)
+
+    def notify(self, pokemon, message, notification_setting):
+        # find the handler and notify
+        lat = message['latitude']
+        lon = message['longitude']
+        data = {
+            'encounter_id': message['encounter_id'],
+            'time': get_disappear_time(message['disappear_time']),
+            'time_left': get_time_left(message['disappear_time']),
+            'google_maps': get_google_maps(lat, lon),
+            'static_google_maps': get_static_google_maps(lat, lon),
+            'gamepress': get_gamepress(message['pokemon_id'])
+        }
+        pokemon.update(data)
+
+        # add sublocality
+        if self.fetch_sublocality and 'sublocality' not in pokemon:
+            if not self.google_key:
+                log.warn('You must provide a google api key in order to fetch sublocality')
+                pokemon['sublocality'] = None
+            else:
+                pokemon['sublocality'] = get_sublocality(pokemon['lat'], pokemon['lon'], self.google_key)
+
+        # now notify all endpoints
+        endpoints = notification_setting.get('endpoints', ['simple'])
+        for endpoint_ref in endpoints:
+            endpoint = self.endpoints.get(endpoint_ref, {})
+            notification_type = endpoint.get('type', 'simple')
+            notification_handler = self.notification_handlers[notification_type]
+
+            log.debug(u"Notifying to endpoint {} about {}".format(endpoint_ref, pokemon['name']))
+            notification_handler.notify_pokemon(endpoint, pokemon)
 
     def enqueue(self, data):
         self.queue.put(data)
