@@ -205,10 +205,6 @@ class Notifier(Thread):
         if not Notifier.check_min_max('iv', included_pokemon, pokemon):
             return False
 
-        # check cp
-        if not Notifier.check_min_max('cp', included_pokemon, pokemon):
-            return False
-
         # check attack
         if not Notifier.check_min_max('attack', included_pokemon, pokemon):
             return False
@@ -220,6 +216,53 @@ class Notifier(Thread):
         # check stamina
         if not Notifier.check_min_max('stamina', included_pokemon, pokemon):
             return False
+
+        # check cp at level
+        min_cp = included_pokemon.get('min_cp')
+        if min_cp is not None:
+            if 'attack' not in pokemon or 'defense' not in pokemon or 'stamina' not in pokemon:
+                return False
+
+            for level in min_cp:
+                required_cp = min_cp[level]
+                cp = get_cp_for_level(pokemon['id'], int(level), pokemon['attack'], pokemon['defense'],
+                                      pokemon['stamina'])
+                if cp < required_cp:
+                    return False
+
+        max_cp = included_pokemon.get('max_cp')
+        if max_cp is not None:
+            if 'attack' not in pokemon or 'defense' not in pokemon or 'stamina' not in pokemon:
+                return False
+
+            for level in max_cp:
+                required_cp = max_cp[level]
+                cp = get_cp_for_level(pokemon['id'], level, pokemon['attack'], pokemon['defense'], pokemon['stamina'])
+                if cp < required_cp:
+                    return False
+
+        # check hp at level
+        min_hp = included_pokemon.get('min_hp')
+        if min_hp is not None:
+            if 'stamina' not in pokemon:
+                return False
+
+            for level in min_hp:
+                required_hp = min_hp[level]
+                hp = get_hp_for_level(pokemon['id'], int(level), pokemon['stamina'])
+                if hp < required_hp:
+                    return False
+
+        max_hp = included_pokemon.get('max_hp')
+        if max_hp is not None:
+            if 'stamina' not in pokemon:
+                return False
+
+            for level in max_hp:
+                required_hp = max_hp[level]
+                hp = get_hp_for_level(pokemon['id'], level, pokemon['stamina'])
+                if hp < required_hp:
+                    return False
 
         # check distance
         max_dist = included_pokemon.get('max_dist')
@@ -270,6 +313,7 @@ class Notifier(Thread):
 
         # initialize the pokemon dict
         pokemon = {
+            'id': message['pokemon_id'],
             'name': get_pokemon_name(message['pokemon_id']),
             'lat': message['latitude'],
             'lon': message['longitude']
@@ -285,10 +329,6 @@ class Notifier(Thread):
             pokemon['defense'] = defense
             pokemon['stamina'] = stamina
             pokemon['iv'] = iv
-
-        # add cp if available
-        if 'cp' in message and message['cp'] is not None:
-            pokemon['cp'] = int(message['cp'])
 
         # add moves to pokemon dict if found
         move_1, move_2 = None, None
@@ -328,7 +368,6 @@ class Notifier(Thread):
                 lat = message['latitude']
                 lon = message['longitude']
                 data = {
-                    'id': message['pokemon_id'],
                     'encounter_id': message['encounter_id'],
                     'time': get_disappear_time(message['disappear_time']),
                     'time_left': get_time_left(message['disappear_time']),

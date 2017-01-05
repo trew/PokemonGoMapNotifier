@@ -3,6 +3,7 @@ import datetime
 import requests
 import logging
 import gpxpy.geo
+import math
 
 log = logging.getLogger(__name__)
 
@@ -86,3 +87,43 @@ def get_sublocality(latitude, longitude, api_key):
 
 def get_distance(lat1, lon1, lat2, lon2):
     return int(gpxpy.geo.haversine_distance(lat1, lon1, lat2, lon2))
+
+
+def get_stats(pokemon_id):
+    if not hasattr(get_pokemon_name, 'stats'):
+        with open('data/stats.json', 'r') as f:
+            get_stats.stats = json.load(f)
+
+    return get_stats.stats.get(str(pokemon_id))
+
+
+def get_cpm_for_level(level):
+    if not hasattr(get_cpm_for_level, 'cpm'):
+        with open('data/cpm.json', 'r') as f:
+            get_cpm_for_level.cpm = json.load(f)
+
+    return get_cpm_for_level.cpm.get(str(level))
+
+
+def get_cp_for_level(pokemon_id, level, iv_attack, iv_defense, iv_stamina):
+    stats = get_stats(pokemon_id)
+    attack = stats.get('attack') + iv_attack
+    defense = stats.get('defense') + iv_defense
+    stamina = stats.get('stamina') + iv_stamina
+
+    cp_multiplier = get_cpm_for_level(level)
+
+    cp = attack * math.sqrt(defense) * math.sqrt(stamina) * (math.pow(cp_multiplier, 2) / float(10))
+
+    return int(math.floor(cp))
+
+
+def get_hp_for_level(pokemon_id, level, iv_stamina):
+    stats = get_stats(pokemon_id)
+    stamina = stats.get('stamina') + iv_stamina
+
+    cp_multiplier = get_cpm_for_level(level)
+
+    hp = stamina * cp_multiplier
+
+    return int(math.floor(hp))
