@@ -35,12 +35,13 @@ class Notifier(Thread):
 
             log.debug("Parsing \"endpoints\"")
             self.endpoints = parsed.get('endpoints', {})
+
+            log.info("Adding Simple to available notification handlers")
+            from .simple import Simple
+            self.notification_handlers['simple'] = Simple()
+
             for endpoint in self.endpoints:
-                endpoint_type = self.endpoints[endpoint].get('type', 'simple')
-                if endpoint_type == 'simple' and 'simple' not in self.notification_handlers:
-                    log.info("Adding Simple to available notification handlers")
-                    from .simple import Simple
-                    self.notification_handlers['simple'] = Simple()
+                endpoint_type = self.endpoints[endpoint].get('type')
                 if endpoint_type == 'discord' and 'discord' not in self.notification_handlers:
                     log.info("Adding Discord to available notification handlers")
                     from .discord import Discord
@@ -60,7 +61,6 @@ class Notifier(Thread):
 
             log.info("Parsing pokemon lists")
             self.parse_includes()
-            # TODO check for circular pokemons_refs and raise errors if such exists
 
     def parse_includes(self):
         log.debug("Add global include config to local pokemons")
@@ -393,7 +393,7 @@ class Notifier(Thread):
                 # now notify all endpoints
                 endpoints = notification_setting.get('endpoints', ['simple'])
                 for endpoint_ref in endpoints:
-                    endpoint = self.endpoints[endpoint_ref]
+                    endpoint = self.endpoints.get(endpoint_ref, {})
                     notification_type = endpoint.get('type', 'simple')
                     notification_handler = self.notification_handlers[notification_type]
 
