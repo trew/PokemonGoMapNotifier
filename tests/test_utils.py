@@ -24,3 +24,13 @@ class TestUtils(unittest.TestCase):
         # Snorlax at level 12 with 15,14,14
         hp = utils.get_hp_for_level(143, 12, 14)
         self.assertEqual(hp, 154)
+
+    def test_get_level_from_cpm(self):
+        # level 29 as reported from the api
+        level = utils.get_level_from_cpm(0.719399094581604)
+        self.assertEqual(level, 29)
+
+        for i in range(1, 30):
+            cpm = utils.get_cpm_for_level(i)
+            level = utils.get_level_from_cpm(cpm)
+            self.assertEqual(level, i)

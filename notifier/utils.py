@@ -16,6 +16,18 @@ def get_pokemon_name(pokemon_id):
     return get_pokemon_name.names.get(str(pokemon_id), 'unknown')
 
 
+def get_pokemon_id(pokemon_name):
+    if not hasattr(get_pokemon_id, 'ids'):
+        if not hasattr(get_pokemon_name, 'names'):
+            get_pokemon_name(1) # initialize it
+
+        get_pokemon_id.ids = {}
+        for id, name in get_pokemon_name.names.iteritems():
+            get_pokemon_id.ids[name] = str(id)
+
+    return get_pokemon_id.ids.get(pokemon_name, '-1')
+
+
 def get_move_name(move_id):
     if not hasattr(get_move_name, 'names'):
         with open('data/moves.json', 'r') as f:
@@ -119,6 +131,25 @@ def get_cpm_for_level(level):
             get_cpm_for_level.cpm = json.load(f)
 
     return get_cpm_for_level.cpm.get(str(level))
+
+
+def get_level_from_cpm(cpm_in):
+    if not hasattr(get_level_from_cpm, 'levels'):
+        if not hasattr(get_cpm_for_level, 'cpm'):
+            get_cpm_for_level(1)
+
+    cpm_in = str(cpm_in)
+    max_length = 5
+
+    if len(cpm_in) > max_length:
+        cpm_in = cpm_in[:max_length]
+
+    level_to_cpm = {}
+    for level,cpm in get_cpm_for_level.cpm.iteritems():
+        cpm_cmp = str(cpm)[:max_length]
+        level_to_cpm[cpm_cmp] = level
+
+    return int(level_to_cpm.get(cpm_in, '-1'))
 
 
 def get_cp_for_level(pokemon_id, level, iv_attack, iv_defense, iv_stamina):
