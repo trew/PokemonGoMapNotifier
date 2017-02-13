@@ -10,3 +10,6 @@ class NotificationHandler(object):
 
     def notify_pokemon(self, settings, pokemon):
         raise NotImplementedError("abstract method")
+
+    def notify_gym(self, endpoint, gym):
+        raise NotImplementedError("abstract method")

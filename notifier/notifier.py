@@ -20,6 +20,7 @@ class Notifier(Thread):
         self.notification_handlers = {}
         self.processed_pokemons = {}
         self.latitude, self.longitude = None, None
+        self.gyms = {}
 
         self.queue = Queue.Queue()
 
@@ -34,6 +35,7 @@ class Notifier(Thread):
             self.shorten_urls = config.get('shorten_urls', False)
 
             self.endpoints = parsed.get('endpoints', {})
+            self.trainers = parsed.get('trainers', [])
 
             from .simple import Simple
             self.notification_handlers['simple'] = Simple()
@@ -156,6 +158,8 @@ class Notifier(Thread):
 
                 if message_type == 'pokemon':
                     self.handle_pokemon(data['message'])
+                elif message_type == 'gym_details':
+                    self.handle_gym_details(data['message'])
                 else:
                     log.debug('Unsupported message type: %s', message_type)
             self.clean()
@@ -365,6 +369,7 @@ class Notifier(Thread):
         if move_2 is not None:
             pokemon['move_2'] = move_2
 
+        notified = set([])
         # Loop through all active includes and send notifications if appropriate
         for include_ref in self.includes:
             include = self.includes.get(include_ref)
@@ -374,7 +379,10 @@ class Notifier(Thread):
                 notification_setting_refs = self.includes_to_notifications.get(include_ref)
                 log.info('Notifying to %s', notification_setting_refs)
                 for notification_setting_ref in notification_setting_refs:
+                    if notification_setting_ref in notified:
+                        continue
                     notification_setting = self.notification_settings.get(notification_setting_ref)
+                    notified.add(notification_setting_ref)
                     self.notify(pokemon, message, notification_setting)
             else:
                 log.debug('No match for %s in %s', pokemon['name'], include_ref)
@@ -388,7 +396,7 @@ class Notifier(Thread):
             'time': get_disappear_time(message['disappear_time']),
             'time_left': get_time_left(message['disappear_time']),
             'google_maps': get_google_maps(lat, lon),
-            'static_google_maps': get_static_google_maps(lat, lon),
+            'static_google_maps': get_static_google_maps(lat, lon, self.google_key),
             'gamepress': get_gamepress(message['pokemon_id'])
         }
         pokemon.update(data)
@@ -410,6 +418,74 @@ class Notifier(Thread):
 
             log.debug(u"Notifying to endpoint {} about {}".format(endpoint_ref, pokemon['name']))
             notification_handler.notify_pokemon(endpoint, pokemon)
+
+    def notify_gym(self, data, notification_setting):
+        endpoints = notification_setting.get('endpoints', ['simple'])
+        for endpoint_ref in endpoints:
+            endpoint = self.endpoints.get(endpoint_ref, {})
+            notification_type = endpoint.get('type', 'simple')
+            notification_handler = self.notification_handlers[notification_type]
+
+            notification_handler.notify_gym(endpoint, data)
+
+    def handle_gym_details(self, message):
+        parsed_gym = message['id']
+        if parsed_gym not in self.gyms:
+            # first scan of this gym
+            self.gyms[parsed_gym] = {
+                'name': message['name'],
+                'lat': message['latitude'],
+                'lon': message['longitude'],
+                'team': message['team'],
+                'pokemons': message['pokemon'],
+                'trainers': [p['trainer_name'] for p in message['pokemon']]
+            }
+
+            # no further parsing. we only detect changes from here
+            return
+
+        gym = self.gyms[parsed_gym]
+        trainers = [p['trainer_name'] for p in message['pokemon']]
+
+        for notification_settings in self.notification_settings.itervalues():
+            if not notification_settings.get('gym'):
+                continue
+
+            for tracked_trainer_name in self.trainers:
+
+                if tracked_trainer_name in trainers:
+                    # was he in the gym before?
+                    trainer_existed = False
+                    for trainer_name in gym.get('trainers', []):
+                        if tracked_trainer_name == trainer_name:
+                            # trainer is still in the gym
+                            trainer_existed = True
+                            break
+
+                    if not trainer_existed:
+                        # he wasn't in the gym before!
+                        data = {
+                            'trainer_name': tracked_trainer_name,
+                            'name': gym['name'],
+                            'lat': message['latitude'],
+                            'lon': message['longitude'],
+                            'team': message['team'],
+                            'google_maps': get_google_maps(message['latitude'], message['longitude']),
+                            'static_google_maps': get_static_google_maps(message['latitude'], message['longitude'],
+                                                                         self.google_key)
+                        }
+                        log.info("%s joined gym: %s", tracked_trainer_name, gym['name'])
+                        self.notify_gym(data, notification_settings)
+
+        # finally update the gym for next time
+        self.gyms[parsed_gym] = {
+            'name': message['name'],
+            'lat': message['latitude'],
+            'lon': message['longitude'],
+            'team': message['team'],
+            'pokemons': message['pokemon'],
+            'trainers': [p['trainer_name'] for p in message['pokemon']]
+        }
 
     def enqueue(self, data):
         self.queue.put(data)

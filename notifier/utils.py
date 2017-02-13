@@ -8,21 +8,33 @@ import math
 log = logging.getLogger(__name__)
 
 
-def get_pokemon_name(id):
+def get_pokemon_name(pokemon_id):
     if not hasattr(get_pokemon_name, 'names'):
         with open('data/names.json', 'r') as f:
             get_pokemon_name.names = json.load(f)
 
-    return get_pokemon_name.names.get(str(id), 'unknown')
+    return get_pokemon_name.names.get(str(pokemon_id), 'unknown')
 
 
-def get_move_name(id):
+def get_move_name(move_id):
     if not hasattr(get_move_name, 'names'):
         with open('data/moves.json', 'r') as f:
             get_move_name.names = json.load(f)
 
-    return get_move_name.names.get(str(id), 'unknown')
+    return get_move_name.names.get(str(move_id), 'unknown')
 
+
+def get_team_name(team_id):
+    if team_id == 0:
+        return "Neutral"
+    if team_id == 1:
+        return "Mystic"
+    if team_id == 2:
+        return "Valor"
+    if team_id == 3:
+        return "Instinct"
+
+    return None
 
 def get_time_left(disappear_time):
     tth = datetime.datetime.fromtimestamp(disappear_time) - datetime.datetime.now()
@@ -44,10 +56,14 @@ def get_gamepress(pokemon_id):
     return "https://pokemongo.gamepress.gg/pokemon/{}".format(pokemon_id)
 
 
-def get_static_google_maps(latitude, longitude, width=300, height=180, zoom=14):
-    return "https://maps.googleapis.com/maps/api/staticmap?markers={},{}&zoom={}&size={}x{}".format(
-        latitude,
-        longitude, zoom, width, height)
+def get_static_google_maps(latitude, longitude, api_key, width=300, height=180, zoom=14):
+    url = "https://maps.googleapis.com/maps/api/staticmap?markers={},{}&zoom={}&size={}x{}".format(
+        latitude, longitude, zoom, width, height)
+
+    if api_key is not None:
+        url += "&key=%s" % api_key
+
+    return url
 
 
 def get_sublocality(latitude, longitude, api_key):

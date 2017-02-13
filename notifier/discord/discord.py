@@ -1,25 +1,50 @@
 from .. import NotificationHandler
+from .. import utils
 import logging
 import requests
-import json
 
 log = logging.getLogger(__name__)
 
 
 class Discord(NotificationHandler):
-    def notify_pokemon(self, settings, pokemon):
-        url = settings.get('url')
+    def notify_pokemon(self, endpoint, pokemon):
+        url = endpoint.get('url')
         if not url:
             log.error("No url available to notify to")
             return
 
         data = self.create_embedded(pokemon)
 
-        for i in range(0, 5):
-            log.debug('Notifying Discord: %s' % data)
-            if self.send(url, data):
-                log.info('Discord notified: %s' % data)
-                break
+        self.try_sending(url, data)
+
+    def notify_gym(self, endpoint, gym):
+        url = endpoint.get('url')
+        if not url:
+            log.error("No url available to notify to")
+            return
+
+        content = '**%s** joined a gym!' % gym.get('trainer_name')
+        embed = {
+            'title': u"Open Google Maps",
+            'url': gym.get('google_maps'),
+            'image': {'url': gym.get('static_google_maps')}
+        }
+
+        name = gym.get('name')
+        team_name = utils.get_team_name(gym.get('team'))
+        if team_name:
+            embed['description'] = 'Gym Name: %s\nGym Team: %s' % (name, team_name)
+            icon = 'https://raw.githubusercontent.com/kvangent/PokeAlarm/master/icons/gym_%s.png' % team_name
+            embed['thumbnail'] = {'url': icon}
+        else:
+            embed['description'] = 'Gym Name: %s' % name
+
+        data = {
+            'content': content,
+            'embeds': [embed]
+        }
+
+        self.try_sending(url, data)
 
     @staticmethod
     def create_embedded(pokemon):
@@ -87,6 +112,16 @@ class Discord(NotificationHandler):
         return {
             'content': body
         }
+
+    def try_sending(self, url, data):
+        for i in range(0, 5):
+            log.debug('Notifying Discord: %s' % data)
+            if self.send(url, data):
+                log.info('Discord notified: %s' % data)
+                return True
+
+        log.error("Failed notification to %s: %s", url, data)
+        return False
 
     @staticmethod
     def send(url, data):
