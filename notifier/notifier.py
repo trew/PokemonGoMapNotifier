@@ -25,72 +25,77 @@ class Notifier(Thread):
 
         self.queue = Queue.Queue()
 
-        with open(config_file) as f:
-            log.info('Loading %s', config_file)
-            parsed = json.load(f)
+        if isinstance(config_file, str):
+            with open(config_file) as f:
+                log.info('Loading %s', config_file)
+                parsed = json.load(f)
+        elif isinstance(config_file, dict):
+            parsed = config_file
+        else:
+            raise RuntimeError('Unexpected parameter type: %s' % config_file)
 
-            log.debug('Parsing "config"')
-            config = parsed.get('config', {})
-            self.google_key = config.get('google_key')
-            self.fetch_sublocality = config.get('fetch_sublocality', False)
-            self.shorten_urls = config.get('shorten_urls', False)
-            scanner.configure(config.get('captcha_key', None), config.get('hash_key', None), config.get('level30_accounts', []))
+        log.debug('Parsing "config"')
+        config = parsed.get('config', {})
+        self.google_key = config.get('google_key')
+        self.fetch_sublocality = config.get('fetch_sublocality', False)
+        self.shorten_urls = config.get('shorten_urls', False)
+        scanner.configure(config.get('captcha_key', None), config.get('hash_key', None), config.get('level30_accounts', []))
 
-            self.endpoints = parsed.get('endpoints', {})
-            self.trainers = parsed.get('trainers', [])
+        self.endpoints = parsed.get('endpoints', {})
+        self.trainers = parsed.get('trainers', [])
 
-            from .simple import Simple
-            self.notification_handlers['simple'] = Simple()
+        from .simple import Simple
+        self.notification_handlers['simple'] = Simple()
 
-            for endpoint in self.endpoints:
-                endpoint_type = self.endpoints[endpoint].get('type')
-                if endpoint_type == 'discord' and 'discord' not in self.notification_handlers:
-                    log.info('Adding Discord to available notification handlers')
-                    from .discord import Discord
-                    self.notification_handlers['discord'] = Discord()
+        for endpoint in self.endpoints:
+            endpoint_type = self.endpoints[endpoint].get('type')
+            if endpoint_type == 'discord' and 'discord' not in self.notification_handlers:
+                log.info('Adding Discord to available notification handlers')
+                from .discord import Discord
+                self.notification_handlers['discord'] = Discord()
 
-            self.includes = parsed.get('includes', {})
+        self.includes = parsed.get('includes', {})
 
-            # filter out disabled notifiers
-            parsed_notification_settings = parsed.get('notification_settings', {})
-            self.notification_settings = {k: v for k, v in parsed_notification_settings.items() if v.get('enabled', True)}
+        # filter out disabled notifiers
+        parsed_notification_settings = parsed.get('notification_settings', {})
+        self.notification_settings = {k: v for k, v in parsed_notification_settings.items() if v.get('enabled', True)}
 
-            self.parse_includes()
+        self.parse_includes()
 
-            self.includes_to_notifications = {}
-            active_includes = set()
+        self.includes_to_notifications = {}
+        active_includes = set()
 
-            # loop through all notification settings
-            for notification_setting in self.notification_settings:
+        # loop through all notification settings
+        for notification_setting in self.notification_settings:
 
-                # get all include references for this notification setting
-                for include in self.notification_settings[notification_setting].get('includes', []):
-                    if include not in self.includes_to_notifications:
-                        self.includes_to_notifications[include] = []
+            # get all include references for this notification setting
+            for include in self.notification_settings[notification_setting].get('includes', []):
+                if include not in self.includes_to_notifications:
+                    self.includes_to_notifications[include] = []
 
-                    # mark this include as active and create the link between includes and notifications
-                    active_includes.add(include)
-                    self.includes_to_notifications[include].append(notification_setting)
+                # mark this include as active and create the link between includes and notifications
+                active_includes.add(include)
+                self.includes_to_notifications[include].append(notification_setting)
 
-            # remove includes that's not used by any notifications
-            self.includes = {k: v for k, v in self.includes.items() if k in active_includes}
+        # remove includes that's not used by any notifications
+        self.includes = {k: v for k, v in self.includes.items() if k in active_includes}
 
-            if not self.includes:
-                raise RuntimeError('No includes configured')
+        if not self.includes:
+            raise RuntimeError('No includes configured')
 
-            # remove includes refs, because they are not needed. simplifies debugging
-            for notification_setting in self.notification_settings:
-                # these references are covered by another dict, namely self.includes_to_notifications
-                self.notification_settings[notification_setting].pop('includes', None)
+        # remove includes refs, because they are not needed. simplifies debugging
+        for notification_setting in self.notification_settings:
+            # these references are covered by another dict, namely self.includes_to_notifications
+            self.notification_settings[notification_setting].pop('includes', None)
 
-                # if it's still here, it's enabled
-                self.notification_settings[notification_setting].pop('enabled', None)
+            # if it's still here, it's enabled
+            self.notification_settings[notification_setting].pop('enabled', None)
 
-            # log some debug info
-            for include,notification_setting_refs in self.includes_to_notifications.iteritems():
-                log.debug('Notifying %s to %s', include, notification_setting_refs)
+        # log some debug info
+        for include,notification_setting_refs in self.includes_to_notifications.iteritems():
+            log.debug('Notifying %s to %s', include, notification_setting_refs)
 
-            log.info('Initialized')
+        log.info('Initialized')
 
     def parse_includes(self):
         self.resolve_configurations()
@@ -128,6 +133,8 @@ class Notifier(Thread):
             include = self.includes[include]
 
             for pokemon in include.get('pokemons', []):
+                self.add_if_missing('min_id', include, pokemon)
+                self.add_if_missing('max_id', include, pokemon)
                 self.add_if_missing('min_iv', include, pokemon)
                 self.add_if_missing('max_iv', include, pokemon)
                 self.add_if_missing('min_cp', include, pokemon)
@@ -221,6 +228,10 @@ class Notifier(Thread):
                 return False, None
             else:
                 match_data.append('name')
+
+        # check id
+        if not Notifier.check_min_max('id', pokemon_rules, pokemon, match_data):
+            return False, None
 
         # check iv
         if not Notifier.check_min_max('iv', pokemon_rules, pokemon, match_data):
