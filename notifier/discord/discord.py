@@ -34,7 +34,7 @@ class Discord(NotificationHandler):
         team_name = utils.get_team_name(gym.get('team'))
         if team_name:
             embed['description'] = 'Gym Name: %s\nGym Team: %s' % (name, team_name)
-            icon = 'https://raw.githubusercontent.com/kvangent/PokeAlarm/master/icons/gym_%s.png' % team_name
+            icon = 'https://raw.githubusercontent.com/kvangent/PokeAlarm/master/icons/gym_%s.png' % team_name.lower()
             embed['thumbnail'] = {'url': icon}
         else:
             embed['description'] = 'Gym Name: %s' % name
