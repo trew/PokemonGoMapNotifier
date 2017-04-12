@@ -229,6 +229,14 @@ class Notifier(Thread):
             else:
                 match_data.append('name')
 
+        # check latitude
+        if not Notifier.check_min_max('lat', pokemon_rules, pokemon, match_data):
+            return False, None
+
+        # check longitude
+        if not Notifier.check_min_max('lon', pokemon_rules, pokemon, match_data):
+            return False, None
+
         # check id
         if not Notifier.check_min_max('id', pokemon_rules, pokemon, match_data):
             return False, None
