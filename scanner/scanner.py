@@ -1,13 +1,20 @@
-import pgoapi
-import pgoapi.utilities
-import datetime
-import time
-import logging
-import requests
 import base64
+import datetime
+import logging
+import time
+
+import requests
+
 import notifier.utils
 
 log = logging.getLogger(__name__)
+
+try:
+    import pgoapi
+    import pgoapi.utilities
+except ImportError:
+    pgoapi = None
+    log.info("Import of pgoapi failed. Level 30+ scans disabled.")
 
 captcha_key = None
 hash_key = None
@@ -53,6 +60,10 @@ def get_account():
 
 def get_api():
     if not hasattr(get_api, 'api'):
+        if pgoapi is None:
+            get_api.api = None
+            return None
+
         api = pgoapi.PGoApi()
         if hash_key is None:
             raise RuntimeError('Hash key must be provided the first time get_api is called')
@@ -218,7 +229,12 @@ def scan_and_encounter(location, pokemon_name):
 
 
 def get_map_objects(location, username):
+    if pgoapi is None:
+        log.warning('get_map_objects called without pgoapi being enabled')
+        return None
+
     api = get_api()
+
     try:
         cell_ids = pgoapi.utilities.get_cell_ids(location[0], location[1])
         timestamps = [0, ] * len(cell_ids)
