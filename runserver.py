@@ -38,7 +38,11 @@ app = Flask(__name__)
 @app.route('/', methods=['POST'])
 def webhook_receiver():
     data = json.loads(request.data)
-    notifier.enqueue(data)
+    if type(data) == dict:
+        notifier.enqueue(data)
+    else:
+        for frame in data:
+            notifier.enqueue(frame)
     return ""
 
 
