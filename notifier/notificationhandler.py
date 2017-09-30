@@ -13,3 +13,6 @@ class NotificationHandler(object):
 
     def notify_gym(self, endpoint, gym):
         raise NotImplementedError("abstract method")
+
+    def notify_raid(self, endpoint, raid):
+        raise NotImplementedError("abstract method")

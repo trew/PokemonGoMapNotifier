@@ -46,6 +46,40 @@ class Discord(NotificationHandler):
 
         self.try_sending(url, data)
 
+    def notify_raid(self, endpoint, raid, gym):
+        url = endpoint.get('url')
+        if not url:
+            log.error("No url available to notify to")
+            return
+
+        data = self.create_raid_embedded(raid, gym)
+
+        self.try_sending(url, data)
+
+    @staticmethod
+    def create_raid_embedded(raid, gym):
+        title = '%s raid at %s starting %s (%s left)!' % (raid.get('name'),
+                                                          gym.get('name'),
+                                                          raid.get('start'),
+                                                          raid.get('time_until_start'))
+        description = u"Raid Level: **%s**\n" % raid['level']
+        description += u"CP: **%s**\n" % raid['cp']
+        description += u"Moves: **%s - %s**\n" % (raid['move_1'], raid['move_2'])
+        description += u"[About %s](%s)" % (raid['name'], raid['gamepress'])
+
+        thumbnail = u'https://raw.githubusercontent.com/kvangent/PokeAlarm/master/icons/{}.png'.format(
+            raid['pokemon_id'])
+        return {
+            'content': title,
+            'embeds': [{
+                'title': u"Open Google Maps",
+                'url': raid['google_maps'],
+                'description': description,
+                'thumbnail': {'url': thumbnail},
+                'image': {'url': raid['static_google_maps']}
+            }]
+        }
+
     @staticmethod
     def create_embedded(pokemon):
         description = u""

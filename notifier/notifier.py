@@ -61,6 +61,7 @@ class Notifier(Thread):
         self.parse_includes()
 
         self.includes_to_notifications = {}
+        self.raid_includes_to_notifications = {}
         active_includes = set()
 
         # loop through all notification settings
@@ -74,6 +75,15 @@ class Notifier(Thread):
                 # mark this include as active and create the link between includes and notifications
                 active_includes.add(include)
                 self.includes_to_notifications[include].append(notification_setting)
+
+            # get all raid references for this notification setting
+            for raid_include in self.notification_settings[notification_setting].get('raids', []):
+                if raid_include not in self.raid_includes_to_notifications:
+                    self.raid_includes_to_notifications[raid_include] = []
+
+                # mark this include as active and create the link between includes and notifications
+                active_includes.add(raid_include)
+                self.raid_includes_to_notifications[raid_include].append(notification_setting)
 
         # remove includes that's not used by any notifications
         self.includes = {k: v for k, v in self.includes.items() if k in active_includes}
@@ -172,6 +182,8 @@ class Notifier(Thread):
                     self.handle_pokemon(data['message'])
                 elif message_type == 'gym_details':
                     self.handle_gym_details(data['message'])
+                elif message_type == 'raid':
+                    self.handle_raid(data['message'])
                 else:
                     log.debug('Unsupported message type: %s', message_type)
             self.clean()
@@ -404,8 +416,9 @@ class Notifier(Thread):
             if match:
                 notification_setting_refs = self.includes_to_notifications.get(include_ref)
 
-                for notification_setting_ref in notification_setting_refs:
-                    to_notify.add(notification_setting_ref)
+                if notification_setting_refs is not None:
+                    for notification_setting_ref in notification_setting_refs:
+                        to_notify.add(notification_setting_ref)
             else:
                 log.debug('No match for %s in %s', pokemon['name'], include_ref)
 
@@ -421,7 +434,7 @@ class Notifier(Thread):
         lon = message['longitude']
         data = {
             'encounter_id': message['encounter_id'],
-            'time': get_disappear_time(message['disappear_time']),
+            'time': get_readable_time(message['disappear_time']),
             'time_left': get_time_left(message['disappear_time']),
             'google_maps': get_google_maps(lat, lon),
             'static_google_maps': get_static_google_maps(lat, lon, self.google_key),
@@ -455,6 +468,43 @@ class Notifier(Thread):
             notification_handler = self.notification_handlers[notification_type]
 
             notification_handler.notify_gym(endpoint, data)
+
+    def notify_raid(self, pokemon, notification_setting):
+        # find the handler and notify
+        lat = pokemon['latitude']
+        lon = pokemon['longitude']
+        gym = self.gyms.get(pokemon['gym_id'])
+        if gym is None:
+            gym = {'name': '(Unknown)'}
+
+        data = {
+            'spawn': get_readable_time(pokemon['spawn']),
+            'start': get_readable_time(pokemon['start']),
+            'end': get_readable_time(pokemon['end']),
+            'time_until_start': get_time_left(pokemon['start']),
+            'google_maps': get_google_maps(lat, lon),
+            'static_google_maps': get_static_google_maps(lat, lon, self.google_key),
+            'gamepress': get_gamepress(pokemon['pokemon_id'])
+        }
+        pokemon.update(data)
+
+        # add sublocality
+        if self.fetch_sublocality and 'sublocality' not in pokemon:
+            if not self.google_key:
+                log.warn('You must provide a google api key in order to fetch sublocality')
+                pokemon['sublocality'] = None
+            else:
+                pokemon['sublocality'] = get_sublocality(pokemon['latitude'], pokemon['longitude'], self.google_key)
+
+        # now notify all endpoints
+        endpoints = notification_setting.get('endpoints', ['simple'])
+        for endpoint_ref in endpoints:
+            endpoint = self.endpoints.get(endpoint_ref, {})
+            notification_type = endpoint.get('type', 'simple')
+            notification_handler = self.notification_handlers[notification_type]
+
+            log.debug(u"Notifying to endpoint {} about raid on {}".format(endpoint_ref, pokemon['name']))
+            notification_handler.notify_raid(endpoint, pokemon, gym)
 
     def handle_gym_details(self, message):
         parsed_gym = message['id']
@@ -514,6 +564,45 @@ class Notifier(Thread):
             'pokemons': message['pokemon'],
             'trainers': [p['trainer_name'] for p in message['pokemon']]
         }
+
+    def handle_raid(self, message):
+        pokemon = {
+            'id': message['pokemon_id'], # for matching
+            'pokemon_id': message['pokemon_id'],
+            'name': get_pokemon_name(message['pokemon_id']),
+            'latitude': message['latitude'],
+            'longitude': message['longitude'],
+            'level': message['level'],
+            'gym_id': message['gym_id'],
+            'spawn': message['spawn'],
+            'start': message['start'],
+            'end': message['end'],
+            'cp': message['cp'],
+            'move_1': get_move_name(message['move_1']),
+            'move_2': get_move_name(message['move_2'])
+        }
+
+        to_notify = set([])
+
+        # Loop through all active includes and send notifications if appropriate
+        for include_ref in self.includes:
+            include = self.includes.get(include_ref)
+            match = self.is_included_pokemon(pokemon, include)
+
+            if match:
+                notification_setting_refs = self.raid_includes_to_notifications.get(include_ref)
+
+                if notification_setting_refs is not None:
+                    for notification_setting_ref in notification_setting_refs:
+                        to_notify.add(notification_setting_ref)
+            else:
+                log.debug('No match for %s in %s', pokemon['name'], include_ref)
+
+        if to_notify:
+            log.info('Notifying to %s', to_notify)
+            for notification_setting_ref in to_notify:
+                notification_setting = self.notification_settings.get(notification_setting_ref)
+                self.notify_raid(pokemon, notification_setting)
 
     def enqueue(self, data):
         self.queue.put(data)

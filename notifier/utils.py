@@ -48,16 +48,17 @@ def get_team_name(team_id):
 
     return None
 
-def get_time_left(disappear_time):
-    tth = datetime.datetime.fromtimestamp(disappear_time) - datetime.datetime.now()
+
+def get_time_left(time):
+    tth = datetime.datetime.fromtimestamp(time) - datetime.datetime.now()
     seconds = tth.total_seconds()
     minutes, seconds = divmod(seconds, 60)
 
     return u"%02d:%02d" % (minutes, seconds)
 
 
-def get_disappear_time(disappear_time):
-    return datetime.datetime.fromtimestamp(disappear_time).strftime('%H:%M')
+def get_readable_time(time):
+    return datetime.datetime.fromtimestamp(time).strftime('%H:%M')
 
 
 def get_google_maps(latitude, longitude):
