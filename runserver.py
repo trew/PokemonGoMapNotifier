@@ -9,8 +9,6 @@ import os
 import json
 import configargparse
 
-import scanner
-
 
 def log_setup(log_console=True, log_file=True):
     formatter = logging.Formatter('%(asctime)s %(levelname)s [%(threadName)s] %(name)s - %(message)s')
@@ -52,21 +50,6 @@ def set_location():
     lon = request.args['lon']
     notifier.set_location(lat, lon)
     return ""
-
-
-@app.route('/scan/', methods=['GET'])
-def scan():
-    pokemon_name = request.args.get('name')
-    loc = request.args.get('loc')
-
-    if pokemon_name is None or loc is None:
-        return "name and loc must be provided"
-
-    lat_lon = loc.split(',')
-    lat, lon = float(lat_lon[0]), float(lat_lon[1])
-
-    data = scanner.scan_and_encounter([lat, lon], pokemon_name)
-    return json.dumps(data)
 
 
 if __name__ == '__main__':

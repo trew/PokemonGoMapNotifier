@@ -3,7 +3,6 @@ from .utils import *
 import logging
 import Queue
 import commentjson as json
-import scanner
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +38,6 @@ class Notifier(Thread):
         self.google_key = config.get('google_key')
         self.fetch_sublocality = config.get('fetch_sublocality', False)
         self.shorten_urls = config.get('shorten_urls', False)
-        scanner.configure(config.get('captcha_key', None), config.get('hash_key', None), config.get('level30_accounts', []))
 
         self.endpoints = parsed.get('endpoints', {})
         self.trainers = parsed.get('trainers', [])
@@ -350,16 +348,13 @@ class Notifier(Thread):
 
     def is_included_pokemon(self, pokemon, included_list):
         matched = False
-        encounter_with_level30 = False
         for included_pokemon in included_list:
             match = self.matches(pokemon, included_pokemon)
             if match[0]:
                 log.info(u"Found match for {} with rules: {}".format(pokemon['name'], match[1]))
                 matched = True
-                if included_pokemon.get('level30cp', False):
-                    encounter_with_level30 = True
 
-        return matched, encounter_with_level30
+        return matched
 
     def handle_pokemon(self, message):
         if message['encounter_id'] in self.processed_pokemons:
@@ -404,34 +399,9 @@ class Notifier(Thread):
         # Loop through all active includes and send notifications if appropriate
         for include_ref in self.includes:
             include = self.includes.get(include_ref)
-            match, encounter_with_level30 = self.is_included_pokemon(pokemon, include)
+            match = self.is_included_pokemon(pokemon, include)
 
             if match:
-                if encounter_with_level30 and 'encounter_data' not in pokemon:
-                    try:
-                        log.info("Trying to encounter pokemon for cp")
-                        pokemon['encounter_data'] = None
-                        encounter_data = scanner.scan_and_encounter([message['latitude'], message['longitude']], pokemon['name'])
-                        log.info("Received encounter_data %s", encounter_data)
-                        if isinstance(encounter_data, list):
-                            for encounter in encounter_data:
-                                if encounter['wild_pokemon']['encounter_id'] == message['encounter_id']:
-                                    pokemon['encounter_data'] = encounter['wild_pokemon']
-                                    break
-                            if pokemon['encounter_data'] is None:
-                                log.warn('Unable to find matching pokemon in encounter data: %s', encounter_data)
-                        else:
-                            if isinstance(encounter_data, str):
-                                #if encounter_data.startswith('No account'):
-                                    #enqueue_level30_scan(pokemon, message, delayed_cp_endpoint)
-                                #    pass
-                                #else:
-                                log.error('Error scanning encounter for %s: %s', pokemon['name'], encounter_data)
-                    except KeyboardInterrupt:
-                        raise
-                    except:
-                        log.exception('Error scanning for encounter for %s', pokemon['name'])
-
                 notification_setting_refs = self.includes_to_notifications.get(include_ref)
 
                 for notification_setting_ref in notification_setting_refs:
