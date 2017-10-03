@@ -87,24 +87,11 @@ class Discord(NotificationHandler):
             description += u"IV: **%s/%s/%s**\n" % (pokemon['attack'], pokemon['defense'], pokemon['stamina'])
         if 'move_1' in pokemon and 'move_2' in pokemon:
             description += u"Moves: **%s - %s**\n" % (pokemon['move_1'], pokemon['move_2'])
-        if 'encounter_data' in pokemon:
-            if pokemon['encounter_data'] is not None:
-                encounter_data = pokemon['encounter_data']
-                pokemon_data = encounter_data.get('pokemon_data')
-                if pokemon_data is not None:
-                    cp = pokemon_data.get('cp')
-                    level = pokemon_data.get('level')
-                    if cp is not None:
-                        if level is not None:
-                            description += u"CP for level 30+: **%s** (Level **%s**)\n" % (cp, level)
-                        else:
-                            description += u"CP for level 30+: **%s**\n" % cp
-                    else:
-                        log.error("Unable to find cp in pokemon data: %s", encounter_data)
-                else:
-                    log.error("Unable to find pokemon data in encounter_data: %s", encounter_data)
-            else:
-                log.error("encounter_data was None")
+        if 'cp' in pokemon and 'level' in pokemon:
+            cp = pokemon.get('cp')
+            level = pokemon.get('level')
+            # todo is it always level 30+?
+            description += u"CP for level 30+: **%s** (Level **%s**)\n" % (cp, level)
 
         description += u"[About %s](%s)" % (pokemon['name'], pokemon['gamepress'])
 

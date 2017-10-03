@@ -380,7 +380,9 @@ class Notifier(Thread):
             'id': message['pokemon_id'],
             'name': get_pokemon_name(message['pokemon_id']),
             'lat': message['latitude'],
-            'lon': message['longitude']
+            'lon': message['longitude'],
+            'cp': message['cp'],
+            'level': message['pokemon_level']
         }
 
         # calculate IV if available and add corresponding values to the pokemon dict
