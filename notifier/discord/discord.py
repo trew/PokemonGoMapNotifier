@@ -58,17 +58,18 @@ class Discord(NotificationHandler):
 
     @staticmethod
     def create_raid_embedded(raid, gym):
-        title = '%s raid at %s starting %s (%s left)!' % (raid.get('name'),
-                                                          gym.get('name'),
-                                                          raid.get('start'),
-                                                          raid.get('time_until_start'))
+        title = '%s raid at %s starting %s (%s left) until %s (%s left)!' % (raid.get('name'),
+                                                                             gym.get('name'),
+                                                                             raid.get('start'),
+                                                                             raid.get('time_until_start'),
+                                                                             raid.get('end'),
+                                                                             raid.get('time_until_end'))
         description = u"Raid Level: **%s**\n" % raid['level']
         description += u"CP: **%s**\n" % raid['cp']
         description += u"Moves: **%s - %s**\n" % (raid['move_1'], raid['move_2'])
         description += u"[About %s](%s)" % (raid['name'], raid['gamepress'])
 
-        thumbnail = u'https://raw.githubusercontent.com/kvangent/PokeAlarm/master/icons/{}.png'.format(
-            raid['pokemon_id'])
+        thumbnail = u'https://raw.githubusercontent.com/kvangent/PokeAlarm/master/icons/{}.png'.format(raid['id'])
         return {
             'content': title,
             'embeds': [{

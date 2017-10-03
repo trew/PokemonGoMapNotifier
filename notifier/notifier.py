@@ -19,6 +19,7 @@ class Notifier(Thread):
         self.name = "Notifier"
         self.notification_handlers = {}
         self.processed_pokemons = {}
+        self.processed_raids = {}
         self.latitude, self.longitude = None, None
         self.gyms = {}
 
@@ -191,11 +192,19 @@ class Notifier(Thread):
     def clean(self):
         now = datetime.datetime.utcnow()
         remove = []
+
         for encounter_id in self.processed_pokemons:
             if self.processed_pokemons[encounter_id] < now:
                 remove.append(encounter_id)
         for encounter_id in remove:
             del self.processed_pokemons[encounter_id]
+
+        remove = []
+        for key in self.processed_raids:
+            if self.processed_raids[key] < now:
+                remove.append(key)
+        for key in remove:
+            del self.processed_raids[key]
 
     @staticmethod
     def check_min(config_key, included_pokemon, message_key, pokemon, match_data):
@@ -269,6 +278,10 @@ class Notifier(Thread):
 
         # check stamina
         if not Notifier.check_min_max('stamina', pokemon_rules, pokemon, match_data):
+            return False, None
+
+        # check level (raids)
+        if not Notifier.check_min_max('level', pokemon_rules, pokemon, match_data):
             return False, None
 
         # check cp at level
@@ -473,8 +486,8 @@ class Notifier(Thread):
 
     def notify_raid(self, pokemon, notification_setting):
         # find the handler and notify
-        lat = pokemon['latitude']
-        lon = pokemon['longitude']
+        lat = pokemon['lat']
+        lon = pokemon['lon']
         gym = self.gyms.get(pokemon['gym_id'])
         if gym is None:
             gym = {'name': '(Unknown)'}
@@ -484,9 +497,10 @@ class Notifier(Thread):
             'start': get_readable_time(pokemon['start']),
             'end': get_readable_time(pokemon['end']),
             'time_until_start': get_time_left(pokemon['start']),
+            'time_until_end': get_time_left(pokemon['end']),
             'google_maps': get_google_maps(lat, lon),
             'static_google_maps': get_static_google_maps(lat, lon, self.google_key),
-            'gamepress': get_gamepress(pokemon['pokemon_id'])
+            'gamepress': get_gamepress(pokemon['id'])
         }
         pokemon.update(data)
 
@@ -496,7 +510,7 @@ class Notifier(Thread):
                 log.warn('You must provide a google api key in order to fetch sublocality')
                 pokemon['sublocality'] = None
             else:
-                pokemon['sublocality'] = get_sublocality(pokemon['latitude'], pokemon['longitude'], self.google_key)
+                pokemon['sublocality'] = get_sublocality(pokemon['lat'], pokemon['lon'], self.google_key)
 
         # now notify all endpoints
         endpoints = notification_setting.get('endpoints', ['simple'])
@@ -568,12 +582,17 @@ class Notifier(Thread):
         }
 
     def handle_raid(self, message):
+        if message['gym_id'] in self.processed_raids:
+            log.debug('Raid Gym ID %s already processed.', message['gym_id'])
+            return
+
+        self.processed_raids[message['gym_id']] = datetime.datetime.utcfromtimestamp(message['end'])
+
         pokemon = {
-            'id': message['pokemon_id'], # for matching
-            'pokemon_id': message['pokemon_id'],
+            'id': message['pokemon_id'],
             'name': get_pokemon_name(message['pokemon_id']),
-            'latitude': message['latitude'],
-            'longitude': message['longitude'],
+            'lat': message['latitude'],
+            'lon': message['longitude'],
             'level': message['level'],
             'gym_id': message['gym_id'],
             'spawn': message['spawn'],
