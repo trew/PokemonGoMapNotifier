@@ -1,0 +1,114 @@
+{
+  "config":
+  {
+    "google_key": "<YOURKEY>",
+    "shorten_urls": false,
+    "fetch_sublocality": false
+  },
+  "endpoints":
+  {
+    "my_discord_channel":
+    {
+        "type": "discord",
+        "url": "http://<YOUR DISCORD WEBHOOK URL>"
+    },
+    "location_channel":
+    {
+        "type": "discord",
+        "url": "http://<YOUR DISCORD WEBHOOK URL>"
+    }
+  },
+  "includes":
+  {
+    "perfect_iv":
+    {
+      "pokemons":
+      [
+        {
+          "min_iv": 100
+        }
+      ]
+    },
+    "some_other_list":
+    {
+      "min_iv": 50,
+      "pokemons":
+      [
+        {
+          "name": "Pidgey"
+        },
+        {
+          "name": "Rattata",
+          "min_iv": 82,
+          "moves":
+          [
+            {
+              "move_1": "Bubble"
+            }
+          ]
+        },
+        {
+          "name": "Blastoise",
+          "min_cp":
+          {
+            "5.5": 300,
+            "10": 600
+          },
+          "max_hp":
+          {
+            "25": 120,
+            "30": 150
+          },
+          "moves":
+          [
+            {
+              "move_2": "Hydro Pump"
+            },
+            {
+              "move_1": "Water Gun",
+              "move_2": "Flash Cannon"
+            }
+          ]
+        }
+      ]
+    },
+    "location_restricted":
+    {
+      "min_lat": 12.123,
+      "max_lat": 23.234,
+      "min_lon": 12.123,
+      "max_lon": 23.234,
+      "pokemons_refs":
+      [
+        "perfect_iv",
+        "some_other_list"
+      ]
+    }
+  },
+  "notification_settings":
+  {
+    "Test":
+    {
+      "endpoints":
+      [
+        "my_discord_channel"
+      ],
+      "includes":
+      [
+        "perfect_iv",
+        "some_other_list"
+      ]
+    },
+    "Location_Restricted":
+    {
+      "endpoints":
+      [
+        "location_channel"
+      ],
+      "includes":
+      [
+        "location_restricted"
+      ]
+    }
+  }
+}
