@@ -88,11 +88,14 @@ class Discord(NotificationHandler):
             description += u"IV: **%s/%s/%s**\n" % (pokemon['attack'], pokemon['defense'], pokemon['stamina'])
         if 'move_1' in pokemon and 'move_2' in pokemon:
             description += u"Moves: **%s - %s**\n" % (pokemon['move_1'], pokemon['move_2'])
-        if 'cp' in pokemon and 'level' in pokemon:
+        if 'cp' in pokemon:
             cp = pokemon.get('cp')
             level = pokemon.get('level')
             # todo is it always level 30+?
-            description += u"CP for level 30+: **%s** (Level **%s**)\n" % (cp, level)
+            if level:
+                description += u"CP for level 30+: **%s** (Level **%s**)\n" % (cp, level)
+            else:
+                description += u"CP for level 30+: **%s**\n" % cp
 
         description += u"[About %s](%s)" % (pokemon['name'], pokemon['gamepress'])
 
