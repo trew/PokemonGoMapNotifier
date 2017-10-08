@@ -1,0 +1,16 @@
+{
+  "message": {
+    "gym_id": "NGY2ZjBjY2Y3OTUyNGQyZWFlMjc3ODkzODM2YmI1Y2YuMTY=",
+    "latitude": 43.59932,
+    "longitude": 5.181415,
+    "spawn": 1500992342,
+    "start": 1501005600,
+    "end": 1501007400,
+    "level": 5,
+    "pokemon_id": 249,
+    "cp": 42753,
+    "move_1": 274,
+    "move_2": 275
+  },
+  "type": "raid"
+}

@@ -206,6 +206,9 @@ class Notifier(Thread):
         for key in remove:
             del self.processed_raids[key]
 
+    def set_notification_handler(self, name, handler):
+        self.notification_handlers[name] = handler
+
     @staticmethod
     def check_min(config_key, included_pokemon, message_key, pokemon, match_data):
         required_value = included_pokemon.get(config_key)
