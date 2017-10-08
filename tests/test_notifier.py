@@ -177,16 +177,16 @@ class TestNotificationHandler(NotificationHandler):
     notify_egg_called = False
     notify_pokemon_called = False
 
-    def on_gym(self):
+    def on_gym(self, endpoint, gym):
         raise NotImplementedError("abstract method")
 
-    def on_raid(self):
+    def on_raid(self, endpoint, raid, gym):
         raise NotImplementedError("abstract method")
 
-    def on_egg(self):
+    def on_egg(self, endpoint, raid, gym):
         raise NotImplementedError("abstract method")
 
-    def on_pokemon(self):
+    def on_pokemon(self, settings, pokemon):
         raise NotImplementedError("abstract method")
 
     def notify_gym(self, endpoint, gym):
