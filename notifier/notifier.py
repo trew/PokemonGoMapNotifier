@@ -587,11 +587,12 @@ class Notifier(Thread):
         }
 
     def handle_raid(self, message):
-        if message['gym_id'] in self.processed_raids:
-            log.debug('Raid Gym ID %s already processed.', message['gym_id'])
+        key = message['gym_id'] + message['start']
+        if key in self.processed_raids:
+            log.debug('Raid [%s] already processed.', key)
             return
 
-        self.processed_raids[message['gym_id']] = datetime.datetime.utcfromtimestamp(message['end'])
+        self.processed_raids[key] = datetime.datetime.utcfromtimestamp(message['end'])
 
         pokemon = {
             'id': message['pokemon_id'],
