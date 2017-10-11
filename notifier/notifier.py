@@ -396,7 +396,8 @@ class Notifier(Thread):
             'id': message['pokemon_id'],
             'name': get_pokemon_name(message['pokemon_id']),
             'lat': message['latitude'],
-            'lon': message['longitude']
+            'lon': message['longitude'],
+            'player_level': message['player_level']
         }
 
         if message.get('cp') is not None:
