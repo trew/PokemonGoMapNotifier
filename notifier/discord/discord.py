@@ -88,7 +88,9 @@ class Discord(NotificationHandler):
             description += u"IV: **%s/%s/%s**\n" % (pokemon['attack'], pokemon['defense'], pokemon['stamina'])
         if 'move_1' in pokemon and 'move_2' in pokemon:
             description += u"Moves: **%s - %s**\n" % (pokemon['move_1'], pokemon['move_2'])
-        if 'cp' in pokemon:
+        if 'form' in pokemon:
+            description += u"Form: **%s**\n" % pokemon['form']
+        if 'cp' in pokemon and 'level' in pokemon:
             cp = pokemon.get('cp')
             level = pokemon.get('level')
             # todo is it always level 30+?
@@ -127,6 +129,10 @@ class Discord(NotificationHandler):
         include_ivs = 'iv' in pokemon and not perfect_ivs and not anti_perfect_ivs
 
         title += u"**{}**".format(pokemon['name'])
+
+        if 'form' in pokemon:
+            title += u"(**{}**)".format(pokemon['form'])
+
         if include_ivs:
             title += u" (**{}%**)".format(int(round(pokemon['iv'])))
 

@@ -396,12 +396,17 @@ class Notifier(Thread):
             'id': message['pokemon_id'],
             'name': get_pokemon_name(message['pokemon_id']),
             'lat': message['latitude'],
-            'lon': message['longitude'],
-            'cp': message['cp']
+            'lon': message['longitude']
         }
 
-        if 'pokemon_level' in message:
+        if message.get('cp') is not None:
+            pokemon['cp'] = message['cp']
+
+        if message.get('pokemon_level') is not None:
             pokemon['level'] = message['pokemon_level']
+
+        if message.get('form') is not None:
+            pokemon['form'] = chr(message['form'] + 64)
 
         # calculate IV if available and add corresponding values to the pokemon dict
         attack = int(message.get('individual_attack') if message.get('individual_attack') is not None else -1)
