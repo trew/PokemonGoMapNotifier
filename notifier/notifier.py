@@ -592,7 +592,7 @@ class Notifier(Thread):
         }
 
     def handle_raid(self, message):
-        key = message['gym_id'] + message['start']
+        key = message['gym_id'] + str(message['start'])
         if key in self.processed_raids:
             log.debug('Raid [%s] already processed.', key)
             return
