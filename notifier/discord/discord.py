@@ -93,11 +93,7 @@ class Discord(NotificationHandler):
         if 'cp' in pokemon and 'level' in pokemon:
             cp = pokemon.get('cp')
             level = pokemon.get('level')
-            player_level = pokemon.get('player_level')
-            if int(player_level) > 30:
-                player_level = '30+'
-
-            description += u"CP for level %s: **%s** (Level **%s**)\n" % (player_level, cp, level)
+            description += u"CP for level 30+: **%s** (Level **%s**)\n" % (cp, level)
 
         description += u"[About %s](%s)" % (pokemon['name'], pokemon['gamepress'])
 
