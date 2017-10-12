@@ -1,0 +1,30 @@
+{
+  "message": {
+    "weight": 11.205081939697266,
+    "seconds_until_despawn": 1717,
+    "cp_multiplier": 0.5822789072990417,
+    "height": 0.3513382077217102,
+    "time_until_hidden_ms": -200284680,
+    "last_modified_time": 1507733805575,
+    "cp": 459,
+    "move_1": 219,
+    "move_2": 125,
+    "verified": true,
+    "pokemon_id": 133,
+    "individual_stamina": 2,
+    "spawn_start": 3323,
+    "latitude": 58.56606681978331,
+    "individual_attack": 8,
+    "disappear_time": 1507735522,
+    "form": 2,
+    "spawnpoint_id": "46593ba07a3",
+    "encounter_id": "MzI3NDgyOTAwMTY3MzEyMTM5NA==",
+    "spawn_end": 1522,
+    "individual_defense": 10,
+    "player_level": 3,
+    "gender": 1,
+    "longitude": 16.201907015156106,
+    "pokemon_level": 19
+  },
+  "type": "pokemon"
+}

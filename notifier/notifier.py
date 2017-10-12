@@ -19,6 +19,7 @@ class Notifier(Thread):
         self.name = "Notifier"
         self.notification_handlers = {}
         self.processed_pokemons = {}
+        self.processed_eggs = {}
         self.processed_raids = {}
         self.latitude, self.longitude = None, None
         self.gyms = {}
@@ -206,6 +207,13 @@ class Notifier(Thread):
         for key in remove:
             del self.processed_raids[key]
 
+        remove = []
+        for key in self.processed_eggs:
+            if self.processed_eggs[key] < now:
+                remove.append(key)
+        for key in remove:
+            del self.processed_eggs[key]
+
     def set_notification_handler(self, name, handler):
         self.notification_handlers[name] = handler
 
@@ -244,7 +252,8 @@ class Notifier(Thread):
         check_max = Notifier.check_max('max_' + key, included_pokemon, key, pokemon, match_data)
         return check_min and check_max
 
-    def matches(self, pokemon, pokemon_rules):
+    # TODO remove egg, as it is a temporary hack
+    def matches(self, pokemon, pokemon_rules, egg=False):
         match_data = []
 
         # check name. if name specification doesn't exist, it counts as valid
@@ -264,8 +273,10 @@ class Notifier(Thread):
             return False, None
 
         # check id
-        if not Notifier.check_min_max('id', pokemon_rules, pokemon, match_data):
-            return False, None
+        # TODO remove egg, as it is a temporary hack
+        if not egg:
+            if not Notifier.check_min_max('id', pokemon_rules, pokemon, match_data):
+                return False, None
 
         # check iv
         if not Notifier.check_min_max('iv', pokemon_rules, pokemon, match_data):
@@ -355,29 +366,35 @@ class Notifier(Thread):
             match_data.append('max_dist')
 
         # check moves
-        if 'moves' in pokemon_rules:
-            moves = pokemon_rules['moves']
-            moves_match = False
-            for move_set in moves:
-                move_1 = move_set.get('move_1')
-                move_2 = move_set.get('move_2')
-                move_1_match = move_1 is None or move_1 == pokemon.get('move_1')
-                move_2_match = move_2 is None or move_2 == pokemon.get('move_2')
-                if move_1_match and move_2_match:
-                    moves_match = True
-                    break
-            if not moves_match:
-                return False, None
+        # TODO remove egg, as it is a temporary hack
+        if not egg:
+            if 'moves' in pokemon_rules:
+                moves = pokemon_rules['moves']
+                moves_match = False
+                for move_set in moves:
+                    move_1 = move_set.get('move_1')
+                    move_2 = move_set.get('move_2')
+                    move_1_match = move_1 is None or move_1 == pokemon.get('move_1')
+                    move_2_match = move_2 is None or move_2 == pokemon.get('move_2')
+                    if move_1_match and move_2_match:
+                        moves_match = True
+                        break
+                if not moves_match:
+                    return False, None
 
-            match_data.append('moves')
+                match_data.append('moves')
 
         # Passed all checks. This pokemon matches!
+        if egg:
+            match_data.append("egg")
+
         return True, match_data
 
-    def is_included_pokemon(self, pokemon, included_list):
+    def is_included_pokemon(self, pokemon, included_list, egg=False):
+        # TODO remove egg, as it is a temporary hack
         matched = False
         for included_pokemon in included_list:
-            match = self.matches(pokemon, included_pokemon)
+            match = self.matches(pokemon, included_pokemon, egg)
             if match[0]:
                 log.info(u"Found match for {} with rules: {}".format(pokemon['name'], match[1]))
                 matched = True
@@ -510,8 +527,13 @@ class Notifier(Thread):
             'time_until_end': get_time_left(pokemon['end']),
             'google_maps': get_google_maps(lat, lon),
             'static_google_maps': get_static_google_maps(lat, lon, self.google_key),
-            'gamepress': get_gamepress(pokemon['id'])
         }
+
+        if pokemon['egg']:
+            pass
+        else:
+            data['gamepress'] = get_gamepress(pokemon['id'])
+
         pokemon.update(data)
 
         # add sublocality
@@ -529,8 +551,14 @@ class Notifier(Thread):
             notification_type = endpoint.get('type', 'simple')
             notification_handler = self.notification_handlers[notification_type]
 
-            log.debug(u"Notifying to endpoint {} about raid on {}".format(endpoint_ref, pokemon['name']))
-            notification_handler.notify_raid(endpoint, pokemon, gym)
+            log.debug(
+                u"Notifying to endpoint {} about {} on {}".format(endpoint_ref, "egg" if pokemon["egg"] else "raid",
+                                                                  pokemon['name']))
+            if pokemon['egg']:
+                notification_handler.notify_egg(endpoint, pokemon, gym)
+            else:
+                notification_handler.notify_raid(endpoint, pokemon, gym)
+
 
     def handle_gym_details(self, message):
         parsed_gym = message['id']
@@ -592,16 +620,20 @@ class Notifier(Thread):
         }
 
     def handle_raid(self, message):
+        egg = message['pokemon_id'] is None
         key = message['gym_id'] + str(message['start'])
-        if key in self.processed_raids:
-            log.debug('Raid [%s] already processed.', key)
-            return
-
-        self.processed_raids[key] = datetime.datetime.utcfromtimestamp(message['end'])
+        if egg:
+            if key in self.processed_eggs:
+                log.debug('Egg [%s] already processed.', key)
+                return
+            self.processed_eggs[key] = datetime.datetime.utcfromtimestamp(message['end'])
+        else:
+            if key in self.processed_raids:
+                log.debug('Raid [%s] already processed.', key)
+                return
+            self.processed_raids[key] = datetime.datetime.utcfromtimestamp(message['end'])
 
         pokemon = {
-            'id': message['pokemon_id'],
-            'name': get_pokemon_name(message['pokemon_id']),
             'lat': message['latitude'],
             'lon': message['longitude'],
             'level': message['level'],
@@ -609,17 +641,24 @@ class Notifier(Thread):
             'spawn': message['spawn'],
             'start': message['start'],
             'end': message['end'],
-            'cp': message['cp'],
-            'move_1': get_move_name(message['move_1']),
-            'move_2': get_move_name(message['move_2'])
+            'egg': egg
         }
+
+        if egg:
+            pokemon['name'] = "Egg"
+        else:
+            pokemon['id'] = message['pokemon_id']
+            pokemon['name'] = get_pokemon_name(message['pokemon_id'])
+            pokemon['cp'] = message['cp']
+            pokemon['move_1'] = get_move_name(message['move_1'])
+            pokemon['move_2'] = get_move_name(message['move_2'])
 
         to_notify = set([])
 
         # Loop through all active includes and send notifications if appropriate
         for include_ref in self.includes:
             include = self.includes.get(include_ref)
-            match = self.is_included_pokemon(pokemon, include)
+            match = self.is_included_pokemon(pokemon, include, egg)
 
             if match:
                 notification_setting_refs = self.raid_includes_to_notifications.get(include_ref)
@@ -631,7 +670,7 @@ class Notifier(Thread):
                 log.debug('No match for %s in %s', pokemon['name'], include_ref)
 
         if to_notify:
-            log.info('Notifying to %s', to_notify)
+            log.info('Notifying %s to %s', "egg" if egg else "raid", to_notify)
             for notification_setting_ref in to_notify:
                 notification_setting = self.notification_settings.get(notification_setting_ref)
                 self.notify_raid(pokemon, notification_setting)

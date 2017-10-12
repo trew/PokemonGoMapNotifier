@@ -16,3 +16,9 @@ class Simple(NotificationHandler):
                                                            raid.get('start'),
                                                            raid.get('time_until_start'),
                                                            gym.get('name')))
+
+    def notify_egg(self, endpoint, egg, gym):
+        log.info("%s egg hatching %s (%s left) at %s!" % (egg.get('name'),
+                                                          egg.get('start'),
+                                                          egg.get('time_until_start'),
+                                                          gym.get('name')))

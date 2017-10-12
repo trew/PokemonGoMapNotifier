@@ -56,14 +56,22 @@ class Discord(NotificationHandler):
 
         self.try_sending(url, data)
 
+    def notify_egg(self, endpoint, egg, gym):
+        url = endpoint.get('url')
+        if not url:
+            log.error("No url available to notify to")
+            return
+
+        data = self.create_egg_embedded(egg, gym)
+
+        self.try_sending(url, data)
+
     @staticmethod
     def create_raid_embedded(raid, gym):
-        title = '%s raid at %s starting %s (%s left) until %s (%s left)!' % (raid.get('name'),
-                                                                             gym.get('name'),
-                                                                             raid.get('start'),
-                                                                             raid.get('time_until_start'),
-                                                                             raid.get('end'),
-                                                                             raid.get('time_until_end'))
+        title = '%s raid at %s until %s (%s left)!' % (raid.get('name'),
+                                                       gym.get('name'),
+                                                       raid.get('end'),
+                                                       raid.get('time_until_end'))
         description = u"Raid Level: **%s**\n" % raid['level']
         description += u"CP: **%s**\n" % raid['cp']
         description += u"Moves: **%s - %s**\n" % (raid['move_1'], raid['move_2'])
@@ -78,6 +86,27 @@ class Discord(NotificationHandler):
                 'description': description,
                 'thumbnail': {'url': thumbnail},
                 'image': {'url': raid['static_google_maps']}
+            }]
+        }
+
+    @staticmethod
+    def create_egg_embedded(egg, gym):
+        title = 'Raid at %s starting %s (%s left) until %s (%s left)!' % (gym.get('name'),
+                                                                          egg.get('start'),
+                                                                          egg.get('time_until_start'),
+                                                                          egg.get('end'),
+                                                                          egg.get('time_until_end'))
+        description = u"Raid Level: **%s**\n" % egg['level']
+
+        thumbnail = u'https://raw.githubusercontent.com/kvangent/PokeAlarm/master/icons/egg_{}.png'.format(egg['level'])
+        return {
+            'content': title,
+            'embeds': [{
+                'title': u"Open Google Maps",
+                'url': egg['google_maps'],
+                'description': description,
+                'thumbnail': {'url': thumbnail},
+                'image': {'url': egg['static_google_maps']}
             }]
         }
 
