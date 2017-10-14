@@ -1,33 +1,21 @@
 from flask import Flask, request
 from gevent import wsgi
 
-from notifier import Notifier
+from notifier.manager import NotifierManager
 
 import logging
 import logging.handlers
-import os
+import logging.config
 import json
+import yaml
 import configargparse
 
 
-def log_setup(log_console=True, log_file=True):
-    formatter = logging.Formatter('%(asctime)s %(levelname)s [%(threadName)s] %(name)s - %(message)s')
-    log = logging.getLogger()
+def log_setup():
+    with open('logging.yaml') as f:
+        logging.config.dictConfig(yaml.load(f))
 
-    if log_file:
-        if not os.path.exists("log"):
-            os.mkdir("log")
-        # rotate with 20mb size log files
-        file_handler = logging.handlers.RotatingFileHandler('log/server.log', maxBytes=1024 * 1024 * 20, backupCount=10,
-                                                            encoding="utf-8")
-        file_handler.setFormatter(formatter)
-        log.addHandler(file_handler)
-    if log_console:
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        log.addHandler(console_handler)
-
-    return log
+    return logging.getLogger()
 
 
 app = Flask(__name__)
@@ -37,18 +25,11 @@ app = Flask(__name__)
 def webhook_receiver():
     data = json.loads(request.data)
     if type(data) == dict:
-        notifier.enqueue(data)
+        notifiermanager.enqueue(data)
     else:
         for frame in data:
-            notifier.enqueue(frame)
-    return ""
+            notifiermanager.enqueue(frame)
 
-
-@app.route('/location/', methods=['GET'])
-def set_location():
-    lat = request.args['lat']
-    lon = request.args['lon']
-    notifier.set_location(lat, lon)
     return ""
 
 
@@ -66,15 +47,11 @@ if __name__ == '__main__':
     parser = configargparse.ArgParser()
     parser.add_argument('--host', help='Host', default='localhost')
     parser.add_argument('-p', '--port', help='Port', type=int, default=8000)
-    parser.add_argument('--debug', help="Debug mode", action='store_true', default=False)
     parser.add_argument('-c', '--config', help="config.json file to use", default="config/config.json")
     args = parser.parse_args()
 
-    if args.debug:
-        logging.getLogger('notifier').setLevel(logging.DEBUG)
-
-    notifier = Notifier(args.config)
-    notifier.start()
+    notifiermanager = NotifierManager(args.config)
+    notifiermanager.start()
 
     log.info("Webhook server started on http://{}:{}".format(args.host, args.port))
     server = wsgi.WSGIServer((args.host, args.port), app, log=logging.getLogger('pywsgi'))

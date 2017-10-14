@@ -1,0 +1,37 @@
+version: 1
+formatters:
+  simpleFormatter:
+    format: '%(asctime)s %(levelname)s [%(threadName)s] %(name)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: simpleFormatter
+    level: DEBUG
+    stream: ext://sys.stdout
+  file:
+    class: logging.handlers.RotatingFileHandler
+    formatter: simpleFormatter
+    filename: 'log/server.log'
+    level: DEBUG
+    maxBytes: 1024*1024*20
+    backupCount: 10
+    encoding: 'utf-8'
+loggers:
+  notifier:
+    level: INFO
+    handlers: [console, file]
+    propagate: False
+  notifier.config:
+    level: INFO
+    handlers: [console, file]
+    propagate: False
+  notifier.handler:
+    level: INFO
+    handlers: [console, file]
+    propagate: False
+
+root:
+  level: DEBUG
+  handlers: [console, file]
