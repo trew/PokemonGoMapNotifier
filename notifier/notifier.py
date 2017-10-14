@@ -52,13 +52,12 @@ class Notifier:
 
             notification_handler.notify_gym(endpoint, data)
 
-    def notify_raid(self, raid, notification_setting):
+    def notify_raid_or_egg(self, raid, notification_setting):
         # find the handler and notify
         lat = raid['lat']
         lon = raid['lon']
-        gym = raid['gym']
-        if gym is None:
-            gym = {'name': '(Unknown)'}
+        if raid['gym'] is None:
+            raid['gym'] = {'name': '(Unknown)'}
 
         data = {
             'spawn': get_readable_time(raid['spawn']),
@@ -94,6 +93,6 @@ class Notifier:
                 u"Notifying to endpoint {} about {} on {}".format(endpoint_ref, "egg" if raid["egg"] else "raid",
                                                                   raid['name']))
             if raid['egg']:
-                notification_handler.notify_egg(endpoint, raid, gym)
+                notification_handler.notify_egg(endpoint, raid)
             else:
-                notification_handler.notify_raid(endpoint, raid, gym)
+                notification_handler.notify_raid(endpoint, raid)

@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 class Config:
     def __init__(self, config_file):
         self.notification_handlers = {}
-        self.includes_to_notifications = {}
+        self.pokemon_includes_to_notifications = {}
         self.raid_includes_to_notifications = {}
         self.google_key = None
         self.fetch_sublocality = False
@@ -16,7 +16,8 @@ class Config:
         self.endpoints = {}
         self.trainers = []
         self.notification_settings = {}
-        self.includes = {}
+        self.pokemon_includes = {}
+        self.raid_includes = {}
 
         if isinstance(config_file, str):
             with open(config_file) as f:
@@ -46,41 +47,46 @@ class Config:
                 from .discord import Discord
                 self.notification_handlers['discord'] = Discord()
 
-        self.includes = parsed.get('includes', {})
+        self.pokemon_includes = parsed.get('includes', {})
+        self.raid_includes = parsed.get('raid_includes', {})
 
         # filter out disabled notifiers
         parsed_notification_settings = parsed.get('notification_settings', {})
         self.notification_settings = {k: v for k, v in parsed_notification_settings.items() if v.get('enabled', True)}
 
-        self.parse_includes()
+        self.parse_pokemon_includes()
+        self.parse_raid_includes()
 
-        active_includes = set()
+        active_pokemon_includes = set()
+        active_raid_includes = set()
 
         # loop through all notification settings
         for notification_setting in self.notification_settings:
 
             # get all include references for this notification setting
-            for include in self.notification_settings[notification_setting].get('includes', []):
-                if include not in self.includes_to_notifications:
-                    self.includes_to_notifications[include] = []
+            for pokemon_include in self.notification_settings[notification_setting].get('includes', []):
+                if pokemon_include not in self.pokemon_includes_to_notifications:
+                    self.pokemon_includes_to_notifications[pokemon_include] = []
 
                 # mark this include as active and create the link between includes and notifications
-                active_includes.add(include)
-                self.includes_to_notifications[include].append(notification_setting)
+                active_pokemon_includes.add(pokemon_include)
+                self.pokemon_includes_to_notifications[pokemon_include].append(notification_setting)
 
             # get all raid references for this notification setting
-            for raid_include in self.notification_settings[notification_setting].get('raids', []):
+            for raid_include in self.notification_settings[notification_setting].get('raid_includes', []):
                 if raid_include not in self.raid_includes_to_notifications:
                     self.raid_includes_to_notifications[raid_include] = []
 
                 # mark this include as active and create the link between includes and notifications
-                active_includes.add(raid_include)
+                active_raid_includes.add(raid_include)
                 self.raid_includes_to_notifications[raid_include].append(notification_setting)
 
         # remove includes that's not used by any notifications
-        self.includes = {k: v for k, v in self.includes.items() if k in active_includes}
+        # also warn about it
+        self.pokemon_includes = {k: v for k, v in self.pokemon_includes.items() if k in active_pokemon_includes}
+        self.raid_includes = {k: v for k, v in self.raid_includes.items() if k in active_raid_includes}
 
-        if not self.includes:
+        if not self.pokemon_includes and not self.raid_includes:
             raise RuntimeError('No includes configured')
 
         # remove includes refs, because they are not needed. simplifies debugging
@@ -92,22 +98,26 @@ class Config:
             self.notification_settings[notification_setting].pop('enabled', None)
 
         # log some debug info
-        for include,notification_setting_refs in self.includes_to_notifications.iteritems():
-            log.debug('Notifying %s to %s', include, notification_setting_refs)
+        for pokemon_include,notification_setting_refs in self.pokemon_includes_to_notifications.iteritems():
+            log.debug('Notifying %s to %s', pokemon_include, notification_setting_refs)
 
         log.info('Initialized')
 
-    def parse_includes(self):
-        self.resolve_configurations()
-        self.resolve_refs()
+    def parse_pokemon_includes(self):
+        self.resolve_pokemon_configurations()
+        self.resolve_pokemon_refs()
 
         # bring the 'pokemons' entry to root level
-        for include in self.includes:
-            self.includes[include] = self.includes[include]['pokemons']
+        for include in self.pokemon_includes:
+            self.pokemon_includes[include] = self.pokemon_includes[include]['pokemons']
 
-    def resolve_refs(self):
-        for include in self.includes:
-            include = self.includes[include]
+    def parse_raid_includes(self):
+        self.resolve_raid_configurations()
+        #self.resolve_pokemon_refs()
+
+    def resolve_pokemon_refs(self):
+        for include in self.pokemon_includes:
+            include = self.pokemon_includes[include]
             if 'pokemons' not in include:
                 include['pokemons'] = []
 
@@ -115,10 +125,10 @@ class Config:
                 self.add_pokemons_from_ref(ref, include)
 
             include.pop('pokemons_refs', None)
-            self.resolve_configurations()
+            self.resolve_pokemon_configurations()
 
     def add_pokemons_from_ref(self, ref, include):
-        resolved_ref = self.includes.get(ref)
+        resolved_ref = self.pokemon_includes.get(ref)
 
         if 'pokemons' in resolved_ref:
             for pokemon in resolved_ref['pokemons']:
@@ -128,9 +138,21 @@ class Config:
             for r in resolved_ref['pokemons_refs']:
                 self.add_pokemons_from_ref(r, include)
 
-    def resolve_configurations(self):
-        for include in self.includes:
-            include = self.includes[include]
+    def resolve_raid_configurations(self):
+        for include in self.raid_includes:
+            include = self.raid_includes[include]
+
+            for raid_pokemon in include.get('pokemons', []):
+                self.add_if_missing('min_level', include, raid_pokemon)
+                self.add_if_missing('max_level', include, raid_pokemon)
+                self.add_if_missing('min_cp', include, raid_pokemon)
+                self.add_if_missing('max_cp', include, raid_pokemon)
+                self.add_if_missing('moves', include, raid_pokemon)
+                self.add_if_missing('name', include, raid_pokemon)
+
+    def resolve_pokemon_configurations(self):
+        for include in self.pokemon_includes:
+            include = self.pokemon_includes[include]
 
             for pokemon in include.get('pokemons', []):
                 self.add_if_missing('min_id', include, pokemon)
@@ -154,7 +176,6 @@ class Config:
                 self.add_if_missing('name', include, pokemon)
                 self.add_if_missing('max_dist', include, pokemon)
                 self.add_if_missing('moves', include, pokemon)
-                self.add_if_missing('level30cp', include, pokemon)
 
     @staticmethod
     def add_if_missing(key, source, target):

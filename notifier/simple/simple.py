@@ -11,14 +11,14 @@ class Simple(NotificationHandler):
     def notify_gym(self, endpoint, gym):
         log.info(gym.get('trainer_name') + " joined " + gym.get('name'))
 
-    def notify_raid(self, endpoint, raid, gym):
+    def notify_raid(self, endpoint, raid):
         log.info("%s raid starting %s (%s left) at %s!" % (raid.get('name'),
                                                            raid.get('start'),
                                                            raid.get('time_until_start'),
-                                                           gym.get('name')))
+                                                           raid['gym'].get('name')))
 
-    def notify_egg(self, endpoint, egg, gym):
+    def notify_egg(self, endpoint, egg):
         log.info("%s egg hatching %s (%s left) at %s!" % (egg.get('name'),
                                                           egg.get('start'),
                                                           egg.get('time_until_start'),
-                                                          gym.get('name')))
+                                                          egg['gym'].get('name')))

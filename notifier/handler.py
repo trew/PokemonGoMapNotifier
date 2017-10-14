@@ -89,12 +89,12 @@ class Handler:
         to_notify = set([])
 
         # Loop through all active includes and send notifications if appropriate
-        for include_ref in self.config.includes:
-            include = self.config.includes.get(include_ref)
+        for include_ref in self.config.pokemon_includes:
+            include = self.config.pokemon_includes.get(include_ref)
             match = self.is_included_pokemon(pokemon, include)
 
             if match:
-                notification_setting_refs = self.config.includes_to_notifications.get(include_ref)
+                notification_setting_refs = self.config.pokemon_includes_to_notifications.get(include_ref)
 
                 if notification_setting_refs is not None:
                     for notification_setting_ref in notification_setting_refs:
@@ -205,9 +205,9 @@ class Handler:
         to_notify = set([])
 
         # Loop through all active includes and send notifications if appropriate
-        for include_ref in self.config.includes:
-            include = self.config.includes.get(include_ref)
-            match = self.is_included_pokemon(raid, include, egg)
+        for include_ref in self.config.raid_includes:
+            include = self.config.raid_includes.get(include_ref)
+            match = self.is_included_raid(raid, include)
 
             if match:
                 notification_setting_refs = self.config.raid_includes_to_notifications.get(include_ref)
@@ -222,23 +222,85 @@ class Handler:
             log.info('Notifying %s to %s', "egg" if egg else "raid", to_notify)
             for notification_setting_ref in to_notify:
                 notification_setting = self.config.notification_settings.get(notification_setting_ref)
-                self.notifier.notify_raid(raid, notification_setting)
+                self.notifier.notify_raid_or_egg(raid, notification_setting)
 
     @staticmethod
-    def is_included_pokemon(pokemon, included_list, egg=False):
-        # TODO remove egg, as it is a temporary hack
+    def is_included_pokemon(pokemon, included_list):
         matched = False
         for included_pokemon in included_list:
-            match = Handler.matches(pokemon, included_pokemon, egg)
+            match = Handler.pokemon_matches(pokemon, included_pokemon)
             if match[0]:
                 log.info(u"Found match for {} with rules: {}".format(pokemon['name'], match[1]))
                 matched = True
 
         return matched
 
+    @staticmethod
+    def raid_matches(raid, rules):
+        match_data = []
+
+        egg = raid['egg']
+
+        if egg and not rules.get('egg', True):
+            return False, None
+
+        if not egg and not rules.get('raid', True):
+            return False, None
+
+        levels = rules.get('levels')
+        if levels is not None:
+            if raid['level'] not in levels:
+                return False, None
+
+            match_data.append('levels')
+
+        # only process pokemon rules if it's not an egg
+        if not egg:
+            pokemons = rules.get('pokemons', {})
+            for pokemon_rules in pokemons:
+                name = pokemon_rules.get('name')
+                if name is not None:
+                    if name != raid['name']:
+                        return False, None
+                    else:
+                        match_data.append('name')
+
+                # check cp at level
+                min_cp = pokemon_rules.get('min_cp')
+                if min_cp is not None:
+                    if raid['cp'] < min_cp:
+                        return False, None
+
+                    match_data.append('min_cp')
+
+                max_cp = pokemon_rules.get('max_cp')
+                if max_cp is not None:
+                    if raid['cp'] > max_cp:
+                        return False, None
+
+                    match_data.append('max_cp')
+
+                if 'moves' in pokemon_rules:
+                    moves = pokemon_rules['moves']
+                    moves_match = False
+                    for move_set in moves:
+                        move_1 = move_set.get('move_1')
+                        move_2 = move_set.get('move_2')
+                        move_1_match = move_1 is None or move_1 == raid['move_1']
+                        move_2_match = move_2 is None or move_2 == raid['move_2']
+                        if move_1_match and move_2_match:
+                            moves_match = True
+                            break
+                    if not moves_match:
+                        return False, None
+
+                    match_data.append('moves')
+
+        return True, match_data
+
     # TODO remove egg, as it is a temporary hack
     @staticmethod
-    def matches(pokemon, pokemon_rules, egg=False):
+    def pokemon_matches(pokemon, pokemon_rules):
         match_data = []
 
         # check name. if name specification doesn't exist, it counts as valid
@@ -258,10 +320,8 @@ class Handler:
             return False, None
 
         # check id
-        # TODO remove egg, as it is a temporary hack
-        if not egg:
-            if not Handler.check_min_max('id', pokemon_rules, pokemon, match_data):
-                return False, None
+        if not Handler.check_min_max('id', pokemon_rules, pokemon, match_data):
+            return False, None
 
         # check iv
         if not Handler.check_min_max('iv', pokemon_rules, pokemon, match_data):
@@ -339,28 +399,23 @@ class Handler:
             match_data.append('max_hp')
 
         # check moves
-        # TODO remove egg, as it is a temporary hack
-        if not egg:
-            if 'moves' in pokemon_rules:
-                moves = pokemon_rules['moves']
-                moves_match = False
-                for move_set in moves:
-                    move_1 = move_set.get('move_1')
-                    move_2 = move_set.get('move_2')
-                    move_1_match = move_1 is None or move_1 == pokemon.get('move_1')
-                    move_2_match = move_2 is None or move_2 == pokemon.get('move_2')
-                    if move_1_match and move_2_match:
-                        moves_match = True
-                        break
-                if not moves_match:
-                    return False, None
+        if 'moves' in pokemon_rules:
+            moves = pokemon_rules['moves']
+            moves_match = False
+            for move_set in moves:
+                move_1 = move_set.get('move_1')
+                move_2 = move_set.get('move_2')
+                move_1_match = move_1 is None or move_1 == pokemon.get('move_1')
+                move_2_match = move_2 is None or move_2 == pokemon.get('move_2')
+                if move_1_match and move_2_match:
+                    moves_match = True
+                    break
+            if not moves_match:
+                return False, None
 
-                match_data.append('moves')
+            match_data.append('moves')
 
         # Passed all checks. This pokemon matches!
-        if egg:
-            match_data.append("egg")
-
         return True, match_data
 
     @staticmethod
@@ -397,3 +452,13 @@ class Handler:
         check_min = Handler.check_min('min_' + key, included_pokemon, key, pokemon, match_data)
         check_max = Handler.check_max('max_' + key, included_pokemon, key, pokemon, match_data)
         return check_min and check_max
+
+    @staticmethod
+    def is_included_raid(raid, included_list):
+        match = Handler.raid_matches(raid, included_list)
+        if match[0]:
+            log.info(
+                u"Found raid match for {} with rules: {}".format("Egg" if raid['egg'] else raid['name'], match[1]))
+            return True
+
+        return False

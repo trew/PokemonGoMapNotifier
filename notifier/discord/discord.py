@@ -46,30 +46,30 @@ class Discord(NotificationHandler):
 
         self.try_sending(url, data)
 
-    def notify_raid(self, endpoint, raid, gym):
+    def notify_raid(self, endpoint, raid):
         url = endpoint.get('url')
         if not url:
             log.error("No url available to notify to")
             return
 
-        data = self.create_raid_embedded(raid, gym)
+        data = self.create_raid_embedded(raid)
 
         self.try_sending(url, data)
 
-    def notify_egg(self, endpoint, egg, gym):
+    def notify_egg(self, endpoint, egg):
         url = endpoint.get('url')
         if not url:
             log.error("No url available to notify to")
             return
 
-        data = self.create_egg_embedded(egg, gym)
+        data = self.create_egg_embedded(egg)
 
         self.try_sending(url, data)
 
     @staticmethod
-    def create_raid_embedded(raid, gym):
+    def create_raid_embedded(raid):
         title = '%s raid at %s until %s (%s left)!' % (raid.get('name'),
-                                                       gym.get('name'),
+                                                       raid['gym'].get('name'),
                                                        raid.get('end'),
                                                        raid.get('time_until_end'))
         description = u"Raid Level: **%s**\n" % raid['level']
@@ -90,8 +90,8 @@ class Discord(NotificationHandler):
         }
 
     @staticmethod
-    def create_egg_embedded(egg, gym):
-        title = 'Raid at %s starting %s (%s left) until %s (%s left)!' % (gym.get('name'),
+    def create_egg_embedded(egg):
+        title = 'Raid at %s starting %s (%s left) until %s (%s left)!' % (egg['gym'].get('name'),
                                                                           egg.get('start'),
                                                                           egg.get('time_until_start'),
                                                                           egg.get('end'),

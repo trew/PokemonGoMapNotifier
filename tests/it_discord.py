@@ -25,6 +25,11 @@ class TestNotifier(unittest.TestCase):
                     "pokemons": [pokemons]
                 }
             },
+            "raid_includes": {
+                "default": {
+                    "levels": [1, 2, 3, 4, 5]
+                }
+            },
             "notification_settings": {
                 "Default": {
                     "endpoints": [
@@ -33,7 +38,7 @@ class TestNotifier(unittest.TestCase):
                     "includes": [
                         "default"
                     ],
-                    "raids": [
+                    "raid_includes": [
                         "default"
                     ]
                 }
@@ -41,23 +46,10 @@ class TestNotifier(unittest.TestCase):
         }
 
     @staticmethod
-    def _get_data(pokemon=False, encounter=False, gym_details=False, raid=False, egg=False, custom=None):
-        file_name = None
-        if pokemon:
-            if encounter:
-                file_name = "tests/data/pokemon-with-encounter.json"
-            else:
-                file_name = "tests/data/pokemon-without-encounter.json"
-        elif gym_details:
-            file_name = "tests/data/gym-details.json"
-        elif raid:
-            file_name = "tests/data/raid.json"
-        elif egg:
-            file_name = "tests/data/egg.json"
-        elif custom is not None:
-            file_name = "tests/data/" + custom
+    def _get_data(webhook):
+        filename = "tests/data/webhooks/" + webhook + ".json"
 
-        with file(file_name, 'r') as fp:
+        with file(filename, 'r') as fp:
             return json.load(fp)
 
     def setUp(self):
@@ -68,28 +60,28 @@ class TestNotifier(unittest.TestCase):
         self.notifierhandler = self.notifiermanager.handler
 
     def test_pokemon_without_encounter(self):
-        data = self._get_data(pokemon=True, encounter=False)
+        data = self._get_data("pokemon-without-encounter")
         self.notifierhandler.handle_pokemon(data['message'])
 
     def test_pokemon_encounter(self):
-        data = self._get_data(pokemon=True, encounter=True)
+        data = self._get_data("pokemon-with-encounter")
         self.notifierhandler.handle_pokemon(data['message'])
 
     def test_unown_encounter(self):
-        data = self._get_data(custom="unown-with-encounter.json")
+        data = self._get_data("unown-with-encounter")
         self.notifierhandler.handle_pokemon(data['message'])
 
     def test_raids(self):
-        data = self._get_data(raid=True)
+        data = self._get_data("raid")
         self.notifierhandler.handle_raid(data['message'])
 
     def test_egg(self):
-        data = self._get_data(egg=True)
+        data = self._get_data("egg")
         self.notifierhandler.handle_raid(data['message'])
 
     def test_raid_and_then_egg(self):
-        egg_data = self._get_data(egg=True)['message']
-        raid_data = self._get_data(raid=True)['message']
+        egg_data = self._get_data("egg")['message']
+        raid_data = self._get_data("raid")['message']
 
         self.assertEqual(egg_data['start'], raid_data['start'])
         self.assertEqual(egg_data['gym_id'], raid_data['gym_id'])

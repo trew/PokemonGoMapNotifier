@@ -90,13 +90,13 @@
   {
     "level_1":
     {
-      "levels": [1],
-      "egg": false
+      "egg": false,
+      "levels": [1]
     },
     "level_2":
     {
-      "levels": [2],
-      "egg": false
+      "egg": false,
+      "levels": [2]
     },
     "some_pokemon_and_move_restrictions":
     {
@@ -138,12 +138,7 @@
       [
         "perfect_iv",
         "some_other_list"
-      ],
-			"raid_includes":
-			[
-				"level_1",
-				"some_pokemon_and_move_restrictions"
-			]
+      ]
     },
     "Location_Restricted":
     {
@@ -154,11 +149,7 @@
       "includes":
       [
         "location_restricted"
-      ],
-			"raid_includes":
-			[
-				"egg_level_2"
-			]
+      ]
     }
   }
 }
