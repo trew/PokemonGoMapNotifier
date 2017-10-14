@@ -1,4 +1,5 @@
 from notifier import Notifier, NotificationHandler
+from notifier.manager import NotifierManager
 import json
 import unittest
 
@@ -46,11 +47,17 @@ class TestNotifier(unittest.TestCase):
         with file(file_name, 'r') as fp:
             return json.load(fp)
 
+    def setUp(self):
+        config = self._make_config({"min_id": 0, "max_id": 999})
+        self.notifiermanager = NotifierManager(config)
+        self.config = self.notifiermanager.config
+        self.notifier = self.notifiermanager.notifier
+        self.notifierhandler = self.notifiermanager.handler
+        self.notificationhandler = TestNotificationHandler()
+        self.notifier.set_notification_handler("simple", self.notificationhandler)
+
     def test_pokemon_without_encounter(self):
         data = self._get_data(pokemon=True, encounter=False)
-        config = self._make_config({"min_id": 0, "max_id": 151})
-        notifier = Notifier(config)
-        handler = TestNotificationHandler()
 
         def test(settings, pokemon):
             self.assertFalse('cp' in pokemon)
@@ -63,17 +70,13 @@ class TestNotifier(unittest.TestCase):
             self.assertFalse('level' in pokemon)
             self.assertFalse('iv' in pokemon)
 
-        handler.on_pokemon = test
-        notifier.set_notification_handler("simple", handler)
-        notifier.handle_pokemon(data['message'])
+        self.notificationhandler.on_pokemon = test
+        self.notifierhandler.handle_pokemon(data['message'])
 
-        self.assertTrue(handler.notify_pokemon_called)
+        self.assertTrue(self.notificationhandler.notify_pokemon_called)
 
     def test_pokemon_encounter(self):
         data = self._get_data(pokemon=True, encounter=True)
-        config = self._make_config({"min_id": 0, "max_id": 151})
-        notifier = Notifier(config)
-        handler = TestNotificationHandler()
 
         def test(settings, pokemon):
             self.assertEqual(pokemon['cp'], 459)
@@ -86,49 +89,37 @@ class TestNotifier(unittest.TestCase):
             self.assertAlmostEqual(pokemon['iv'], 44.44, places=2)
             self.assertFalse('form' in pokemon)
 
-        handler.on_pokemon = test
-        notifier.set_notification_handler("simple", handler)
-        notifier.handle_pokemon(data['message'])
+        self.notificationhandler.on_pokemon = test
+        self.notifierhandler.handle_pokemon(data['message'])
 
-        self.assertTrue(handler.notify_pokemon_called)
+        self.assertTrue(self.notificationhandler.notify_pokemon_called)
 
     def test_unown_encounter(self):
         data = self._get_data(custom="unown-with-encounter.json")
-        config = self._make_config({"min_id": 0, "max_id": 151})
-        notifier = Notifier(config)
-        handler = TestNotificationHandler()
 
         def test(settings, pokemon):
             self.assertEqual(pokemon['cp'], 459)
             self.assertEqual(pokemon['level'], 19)
             self.assertEqual(pokemon['form'], 'B')
 
-        handler.on_pokemon = test
-        notifier.set_notification_handler("simple", handler)
-        notifier.handle_pokemon(data['message'])
+        self.notificationhandler.on_pokemon = test
+        self.notifierhandler.handle_pokemon(data['message'])
 
-        self.assertTrue(handler.notify_pokemon_called)
+        self.assertTrue(self.notificationhandler.notify_pokemon_called)
 
     def test_raids(self):
         data = self._get_data(raid=True)
-        config = self._make_config({"min_id": 0, "max_id": 999})
-        notifier = Notifier(config)
-        handler = TestNotificationHandler()
 
         def test(endpoint, raid, gym):
             self.assertFalse(raid['egg'])
 
-        handler.on_raid = test
-        notifier.set_notification_handler("simple", handler)
-        notifier.handle_raid(data['message'])
+        self.notificationhandler.on_raid = test
+        self.notifierhandler.handle_raid(data['message'])
 
-        self.assertTrue(handler.notify_raid_called)
+        self.assertTrue(self.notificationhandler.notify_raid_called)
 
     def test_egg(self):
         data = self._get_data(egg=True)
-        config = self._make_config({"min_id": 0, "max_id": 999})
-        notifier = Notifier(config)
-        handler = TestNotificationHandler()
 
         def test(endpoint, raid, gym):
             self.assertTrue(raid['egg'])
@@ -137,11 +128,10 @@ class TestNotifier(unittest.TestCase):
             self.assertFalse('id' in raid)
             self.assertFalse('cp' in raid)
 
-        handler.on_egg = test
-        notifier.set_notification_handler("simple", handler)
-        notifier.handle_raid(data['message'])
+        self.notificationhandler.on_egg = test
+        self.notifierhandler.handle_raid(data['message'])
 
-        self.assertTrue(handler.notify_egg_called)
+        self.assertTrue(self.notificationhandler.notify_egg_called)
 
     def test_raid_and_then_egg(self):
         egg_data = self._get_data(egg=True)['message']
@@ -150,25 +140,20 @@ class TestNotifier(unittest.TestCase):
         self.assertEqual(egg_data['start'], raid_data['start'])
         self.assertEqual(egg_data['gym_id'], raid_data['gym_id'])
 
-        config = self._make_config({"min_id": 0, "max_id": 999})
-        notifier = Notifier(config)
-        handler = TestNotificationHandler()
-        notifier.set_notification_handler("simple", handler)
-
         def test_egg(endpoint, raid, gym):
             self.assertIsNotNone(raid)
 
-        handler.on_egg = test_egg
-        notifier.handle_raid(egg_data)
-        self.assertTrue(handler.notify_egg_called)
-        self.assertFalse(handler.notify_raid_called)
+        self.notificationhandler.on_egg = test_egg
+        self.notifierhandler.handle_raid(egg_data)
+        self.assertTrue(self.notificationhandler.notify_egg_called)
+        self.assertFalse(self.notificationhandler.notify_raid_called)
 
         def test_raid(endpoint, raid, gym):
             self.assertIsNotNone(raid)
 
-        handler.on_raid = test_raid
-        notifier.handle_raid(raid_data)
-        self.assertTrue(handler.notify_raid_called)
+        self.notificationhandler.on_raid = test_raid
+        self.notifierhandler.handle_raid(raid_data)
+        self.assertTrue(self.notificationhandler.notify_raid_called)
 
 
 class TestNotificationHandler(NotificationHandler):
