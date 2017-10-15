@@ -155,6 +155,7 @@ class Config:
                 self.add_if_missing('max_cp', include, raid_pokemon)
                 self.add_if_missing('moves', include, raid_pokemon)
                 self.add_if_missing('name', include, raid_pokemon)
+                self.add_if_missing('geofence', include, raid_pokemon)
 
     def resolve_pokemon_configurations(self):
         for include in self.pokemon_includes:

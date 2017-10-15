@@ -6,7 +6,7 @@ import unittest
 
 class TestNotifier(unittest.TestCase):
     @staticmethod
-    def _make_config(pokemons):
+    def _make_config(pokemons={'min_id': 1}):
         return {
             "config": {
             },
@@ -27,27 +27,6 @@ class TestNotifier(unittest.TestCase):
                     ],
                     "raid_includes": [
                         "default_raid"
-                    ]
-                }
-            }
-        }
-
-    @staticmethod
-    def _make_geofence_config():
-        return {
-            "config": {
-                "geofence_file": "tests/data/geofence/geofences.txt"
-            },
-            "includes": {
-                "default_pokemon": {
-                    "geofence": "Someplace",
-                    "pokemons": [{'min_id': 1}]
-                }
-            },
-            "notification_settings": {
-                "Default": {
-                    "includes": [
-                        "default_pokemon"
                     ]
                 }
             }
@@ -169,7 +148,11 @@ class TestNotifier(unittest.TestCase):
         self.assertTrue(self.notificationhandler.notify_raid_called)
 
     def setup_geofence(self):
-        config = self._make_geofence_config()
+        config = self._make_config()
+        config['config']['geofence_file'] = "tests/data/geofence/geofences.txt"
+        config['includes']['default_pokemon']['geofence'] = "Someplace"
+        config['raid_includes']['default_raid']['geofence'] = "Someplace"
+
         self.notifiermanager = NotifierManager(config)
         self.config = self.notifiermanager.config
         self.notifier = self.notifiermanager.notifier
@@ -177,10 +160,11 @@ class TestNotifier(unittest.TestCase):
         self.notificationhandler = TestNotificationHandler()
         self.notifier.set_notification_handler("simple", self.notificationhandler)
 
-    def test_inside_geofence(self):
+    def test_pokemon_inside_geofence(self):
         self.setup_geofence()
 
-        message = self._get_data("pokemon-inside-geofence")['message']
+        message = self._get_data("pokemon-without-encounter")['message']
+        message['latitude'], message['longitude'] = get_geofence_coords(True)
 
         def test_geofence(endpoint, pokemon):
             self.assertIsNotNone(pokemon)
@@ -190,10 +174,11 @@ class TestNotifier(unittest.TestCase):
 
         self.assertTrue(self.notificationhandler.notify_pokemon_called)
 
-    def test_outside_geofence(self):
+    def test_pokemon_outside_geofence(self):
         self.setup_geofence()
 
-        message = self._get_data("pokemon-outside-geofence")['message']
+        message = self._get_data("pokemon-without-encounter")['message']
+        message['latitude'], message['longitude'] = get_geofence_coords(False)
 
         def test_geofence(endpoint, pokemon):
             self.assertIsNotNone(pokemon)
@@ -203,12 +188,11 @@ class TestNotifier(unittest.TestCase):
 
         self.assertFalse(self.notificationhandler.notify_pokemon_called)
 
-    def test_way_outside_geofence(self):
+    def test_pokemon_way_outside_geofence(self):
         self.setup_geofence()
 
-        message = self._get_data("pokemon-outside-geofence")['message']
-        message['latitude'] = 150
-        message['longitude'] = 150
+        message = self._get_data("pokemon-without-encounter")['message']
+        message['latitude'], message['longitude'] = 150, 150
 
         def test_geofence(endpoint, pokemon):
             self.assertIsNotNone(pokemon)
@@ -217,6 +201,36 @@ class TestNotifier(unittest.TestCase):
         self.notifierhandler.handle_pokemon(message)
 
         self.assertFalse(self.notificationhandler.notify_pokemon_called)
+
+    def test_raid_inside_geofence(self):
+        self.setup_geofence()
+
+        message = self._get_data("raid")['message']
+        message['latitude'], message['longitude'] = get_geofence_coords(True)
+
+        def test_geofence(endpoint, pokemon):
+            self.assertIsNotNone(pokemon)
+
+        self.notificationhandler.on_raid = test_geofence
+        self.notifierhandler.handle_raid(message)
+
+        self.assertTrue(self.notificationhandler.notify_raid_called)
+
+    def test_raid_outside_geofence(self):
+        self.setup_geofence()
+
+        message = self._get_data("raid")['message']
+        message['latitude'], message['longitude'] = get_geofence_coords(False)
+
+        self.notifierhandler.handle_raid(message)
+        self.assertFalse(self.notificationhandler.notify_raid_called)
+
+
+def get_geofence_coords(inside):
+    if inside:
+        return 47.63527390649546, -122.376708984375
+    else:
+        return 47.59292021272622, -122.26753234863281
 
 
 class TestNotificationHandler(NotificationHandler):

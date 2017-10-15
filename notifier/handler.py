@@ -234,8 +234,7 @@ class Handler:
 
         return matched
 
-    @staticmethod
-    def raid_matches(raid, rules):
+    def raid_matches(self, raid, rules):
         match_data = []
 
         egg = raid['egg']
@@ -254,7 +253,7 @@ class Handler:
             match_data.append('levels')
 
         if 'geofence' in rules:
-            if not Handler.is_inside_geofence(raid.get('lat'), raid.get('lon')):
+            if not self.is_inside_geofence(rules['geofence'], raid.get('lat'), raid.get('lon')):
                 return False, None
 
             match_data.append('geofence')
@@ -462,9 +461,8 @@ class Handler:
         check_max = Handler.check_max('max_' + key, included_pokemon, key, pokemon, match_data)
         return check_min and check_max
 
-    @staticmethod
-    def is_included_raid(raid, included_list):
-        match = Handler.raid_matches(raid, included_list)
+    def is_included_raid(self, raid, included_list):
+        match = self.raid_matches(raid, included_list)
         if match[0]:
             log.info(
                 u"Found raid match for {} with rules: {}".format("Egg" if raid['egg'] else raid['name'], match[1]))
@@ -488,4 +486,4 @@ class Handler:
         if lat < min_x or lat > max_x or lon < min_y or lon > max_y:
             return False
 
-        return point_in_poly(lat, lon, geofence['polygon'])
+        return is_inside_polygon(geofence['polygon'], lat, lon)
