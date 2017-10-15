@@ -33,6 +33,27 @@ class TestNotifier(unittest.TestCase):
         }
 
     @staticmethod
+    def _make_geofence_config():
+        return {
+            "config": {
+                "geofence_file": "tests/data/geofence/geofences.txt"
+            },
+            "includes": {
+                "default_pokemon": {
+                    "geofence": "Someplace",
+                    "pokemons": [{'min_id': 1}]
+                }
+            },
+            "notification_settings": {
+                "Default": {
+                    "includes": [
+                        "default_pokemon"
+                    ]
+                }
+            }
+        }
+
+    @staticmethod
     def _get_data(webhook):
         file_name = "tests/data/webhooks/" + webhook + ".json"
 
@@ -146,6 +167,56 @@ class TestNotifier(unittest.TestCase):
         self.notificationhandler.on_raid = test_raid
         self.notifierhandler.handle_raid(raid_data)
         self.assertTrue(self.notificationhandler.notify_raid_called)
+
+    def setup_geofence(self):
+        config = self._make_geofence_config()
+        self.notifiermanager = NotifierManager(config)
+        self.config = self.notifiermanager.config
+        self.notifier = self.notifiermanager.notifier
+        self.notifierhandler = self.notifiermanager.handler
+        self.notificationhandler = TestNotificationHandler()
+        self.notifier.set_notification_handler("simple", self.notificationhandler)
+
+    def test_inside_geofence(self):
+        self.setup_geofence()
+
+        message = self._get_data("pokemon-inside-geofence")['message']
+
+        def test_geofence(endpoint, pokemon):
+            self.assertIsNotNone(pokemon)
+
+        self.notificationhandler.on_pokemon = test_geofence
+        self.notifierhandler.handle_pokemon(message)
+
+        self.assertTrue(self.notificationhandler.notify_pokemon_called)
+
+    def test_outside_geofence(self):
+        self.setup_geofence()
+
+        message = self._get_data("pokemon-outside-geofence")['message']
+
+        def test_geofence(endpoint, pokemon):
+            self.assertIsNotNone(pokemon)
+
+        self.notificationhandler.on_pokemon = test_geofence
+        self.notifierhandler.handle_pokemon(message)
+
+        self.assertFalse(self.notificationhandler.notify_pokemon_called)
+
+    def test_way_outside_geofence(self):
+        self.setup_geofence()
+
+        message = self._get_data("pokemon-outside-geofence")['message']
+        message['latitude'] = 150
+        message['longitude'] = 150
+
+        def test_geofence(endpoint, pokemon):
+            self.assertIsNotNone(pokemon)
+
+        self.notificationhandler.on_pokemon = test_geofence
+        self.notifierhandler.handle_pokemon(message)
+
+        self.assertFalse(self.notificationhandler.notify_pokemon_called)
 
 
 class TestNotificationHandler(NotificationHandler):

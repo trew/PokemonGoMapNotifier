@@ -224,11 +224,10 @@ class Handler:
                 notification_setting = self.config.notification_settings.get(notification_setting_ref)
                 self.notifier.notify_raid_or_egg(raid, notification_setting)
 
-    @staticmethod
-    def is_included_pokemon(pokemon, included_list):
+    def is_included_pokemon(self, pokemon, included_list):
         matched = False
         for included_pokemon in included_list:
-            match = Handler.pokemon_matches(pokemon, included_pokemon)
+            match = self.pokemon_matches(pokemon, included_pokemon)
             if match[0]:
                 log.info(u"Found match for {} with rules: {}".format(pokemon['name'], match[1]))
                 matched = True
@@ -253,6 +252,12 @@ class Handler:
                 return False, None
 
             match_data.append('levels')
+
+        if 'geofence' in rules:
+            if not Handler.is_inside_geofence(raid.get('lat'), raid.get('lon')):
+                return False, None
+
+            match_data.append('geofence')
 
         # only process pokemon rules if it's not an egg
         if not egg:
@@ -298,9 +303,7 @@ class Handler:
 
         return True, match_data
 
-    # TODO remove egg, as it is a temporary hack
-    @staticmethod
-    def pokemon_matches(pokemon, pokemon_rules):
+    def pokemon_matches(self, pokemon, pokemon_rules):
         match_data = []
 
         # check name. if name specification doesn't exist, it counts as valid
@@ -415,6 +418,12 @@ class Handler:
 
             match_data.append('moves')
 
+        if 'geofence' in pokemon_rules:
+            if not self.is_inside_geofence(pokemon_rules['geofence'], pokemon.get('lat'), pokemon.get('lon')):
+                return False, None
+
+            match_data.append('geofence')
+
         # Passed all checks. This pokemon matches!
         return True, match_data
 
@@ -462,3 +471,21 @@ class Handler:
             return True
 
         return False
+
+    def is_inside_geofence(self, geofence_name, lat, lon):
+        geofence = self.config.geofences.get(geofence_name)
+        if geofence is None:
+            log.warning("geofence {} not found", geofence_name)
+            return False
+
+        # fast boundaries check
+        boundaries = geofence['boundaries']
+        min_x = boundaries['min'][0]
+        min_y = boundaries['min'][1]
+        max_x = boundaries['max'][0]
+        max_y = boundaries['max'][1]
+
+        if lat < min_x or lat > max_x or lon < min_y or lon > max_y:
+            return False
+
+        return point_in_poly(lat, lon, geofence['polygon'])

@@ -1,5 +1,6 @@
 import logging
 import commentjson as json
+import re
 
 
 log = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class Config:
         self.notification_settings = {}
         self.pokemon_includes = {}
         self.raid_includes = {}
+        self.geofences = {}
 
         if isinstance(config_file, str):
             with open(config_file) as f:
@@ -33,6 +35,10 @@ class Config:
         self.google_key = config.get('google_key', self.google_key)
         self.fetch_sublocality = config.get('fetch_sublocality', self.fetch_sublocality)
         self.shorten_urls = config.get('shorten_urls', self.shorten_urls)
+        geofence_file = config.get('geofence_file')
+
+        if geofence_file is not None:
+            self.load_geofences(geofence_file)
 
         self.endpoints = parsed.get('endpoints', self.endpoints)
         self.trainers = parsed.get('trainers', self.trainers)
@@ -176,8 +182,57 @@ class Config:
                 self.add_if_missing('name', include, pokemon)
                 self.add_if_missing('max_dist', include, pokemon)
                 self.add_if_missing('moves', include, pokemon)
+                self.add_if_missing('geofence', include, pokemon)
 
     @staticmethod
     def add_if_missing(key, source, target):
         if key in source and key not in target:
             target[key] = source[key]
+
+    def load_geofences(self, filename):
+        with open(filename) as f:
+            log.info('Loading %s', filename)
+
+            name_regex = "\[([^]]+)\]"
+            coords_regex = "^(\-?\d+(?:\.\d+)?),\s*(\-?\d+(?:\.\d+)?)$"
+            name = None
+            for line in f.readlines():
+                line = line.strip()
+
+                # skip empty lines
+                if not line:
+                    continue
+
+                name_match = re.match(name_regex, line)
+                if name_match is not None:
+                    name = name_match.groups()[0]
+                    if name is None:
+                        raise RuntimeError("wut")
+                    self.geofences[name] = {'boundaries': {}, 'polygon': []}
+                    continue
+
+                coords_match = re.match(coords_regex, line)
+                if coords_match is not None:
+                    if name is None:
+                        raise RuntimeError(
+                            "Found coordinates without name of geofence. Use [<name>] before declaring coordinates")
+                    coords = coords_match.groups()
+                    x = float(coords[0])
+                    y = float(coords[1])
+                    self.geofences[name]['polygon'].append((x, y))
+
+                    if not self.geofences[name]['boundaries']:
+                        self.geofences[name]['boundaries']['min'] = [x, y]
+                        self.geofences[name]['boundaries']['max'] = [x, y]
+                    else:
+                        min_xy = self.geofences[name]['boundaries']['min']
+                        max_xy = self.geofences[name]['boundaries']['max']
+
+                        if x < min_xy[0]:
+                            min_xy[0] = x
+                        if x > max_xy[0]:
+                            max_xy[0] = x
+                        if y < min_xy[1]:
+                            min_xy[1] = y
+                        if y > max_xy[1]:
+                            max_xy[1] = y

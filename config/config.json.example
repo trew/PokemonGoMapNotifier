@@ -4,7 +4,8 @@
   {
     "google_key": "<YOURKEY>",
     "shorten_urls": false,
-    "fetch_sublocality": false
+    "fetch_sublocality": false,
+    "geofence_file": ""
   },
   "endpoints":
   {
