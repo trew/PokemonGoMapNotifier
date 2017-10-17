@@ -57,20 +57,21 @@ class Notifier:
         lat = raid_in['lat']
         lon = raid_in['lon']
 
-        raid = {
-            'spawn': get_readable_time(raid_in['spawn']),
-            'start': get_readable_time(raid_in['start']),
-            'end': get_readable_time(raid_in['end']),
-            'time_until_start': get_time_left(raid_in['start']),
-            'time_until_end': get_time_left(raid_in['end']),
+        raid = {}
+        raid.update(raid_in)
+
+        raid.update({
+            'spawn': get_readable_time(raid['spawn']),
+            'start': get_readable_time(raid['start']),
+            'end': get_readable_time(raid['end']),
+            'time_until_start': get_time_left(raid['start']),
+            'time_until_end': get_time_left(raid['end']),
             'google_maps': get_google_maps(lat, lon),
             'static_google_maps': get_static_google_maps(lat, lon, self.config.google_key),
-        }
+        })
 
-        if raid_in.get('id'):
-            raid['gamepress'] = get_gamepress(raid_in['id'])
-
-        raid.update(raid_in)
+        if raid.get('id'):
+            raid['gamepress'] = get_gamepress(raid['id'])
 
         if raid['gym'] is None:
             raid['gym'] = {'name': '(Unknown)'}
