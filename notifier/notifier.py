@@ -52,27 +52,28 @@ class Notifier:
 
             notification_handler.notify_gym(endpoint, data)
 
-    def notify_raid_or_egg(self, raid, notification_setting):
+    def notify_raid_or_egg(self, raid_in, notification_setting):
         # find the handler and notify
-        lat = raid['lat']
-        lon = raid['lon']
-        if raid['gym'] is None:
-            raid['gym'] = {'name': '(Unknown)'}
+        lat = raid_in['lat']
+        lon = raid_in['lon']
 
-        data = {
-            'spawn': get_readable_time(raid['spawn']),
-            'start': get_readable_time(raid['start']),
-            'end': get_readable_time(raid['end']),
-            'time_until_start': get_time_left(raid['start']),
-            'time_until_end': get_time_left(raid['end']),
+        raid = {
+            'spawn': get_readable_time(raid_in['spawn']),
+            'start': get_readable_time(raid_in['start']),
+            'end': get_readable_time(raid_in['end']),
+            'time_until_start': get_time_left(raid_in['start']),
+            'time_until_end': get_time_left(raid_in['end']),
             'google_maps': get_google_maps(lat, lon),
             'static_google_maps': get_static_google_maps(lat, lon, self.config.google_key),
         }
 
-        if raid.get('id'):
-            data['gamepress'] = get_gamepress(raid['id'])
+        if raid_in['gym'] is None:
+            raid['gym'] = {'name': '(Unknown)'}
 
-        raid.update(data)
+        if raid_in.get('id'):
+            raid['gamepress'] = get_gamepress(raid_in['id'])
+
+        raid.update(raid_in)
 
         # add sublocality
         if self.config.fetch_sublocality and 'sublocality' not in raid:
