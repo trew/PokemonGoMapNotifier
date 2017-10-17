@@ -67,13 +67,13 @@ class Notifier:
             'static_google_maps': get_static_google_maps(lat, lon, self.config.google_key),
         }
 
-        if raid_in['gym'] is None:
-            raid['gym'] = {'name': '(Unknown)'}
-
         if raid_in.get('id'):
             raid['gamepress'] = get_gamepress(raid_in['id'])
 
         raid.update(raid_in)
+
+        if raid['gym'] is None:
+            raid['gym'] = {'name': '(Unknown)'}
 
         # add sublocality
         if self.config.fetch_sublocality and 'sublocality' not in raid:
