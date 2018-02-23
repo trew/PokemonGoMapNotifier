@@ -62,7 +62,7 @@ def get_readable_time(time):
 
 
 def get_google_maps(latitude, longitude):
-    return "https://www.google.com/maps/place/{},{}".format(latitude, longitude)
+    return "https://www.google.com/maps?q={},{}".format(latitude, longitude)
 
 
 def get_gamepress(pokemon_id):
